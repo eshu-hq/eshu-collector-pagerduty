@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	collector "github.com/eshu-hq/eshu-collector-pagerduty"
 )
@@ -27,8 +28,12 @@ const (
 )
 
 // imageRefPattern is the only reference shape seed will stamp into a
-// manifest: a repository, then a full sha256 digest.
-var imageRefPattern = regexp.MustCompile(`^[^@\s]+@sha256:[0-9a-f]{64}$`)
+// manifest: a lowercase repository (dot, dash, or underscore separated path
+// segments, with an optional registry port), then a full sha256 digest. It
+// admits no quote, "$", whitespace, or other YAML-significant character, so a
+// stamped line is always a plain scalar.
+var imageRefPattern = regexp.MustCompile(
+	`^[a-z0-9]+([._-][a-z0-9]+)*(:[0-9]+)?(/[a-z0-9]+([._-][a-z0-9]+)*)*@sha256:[0-9a-f]{64}$`)
 
 // manifestImageLine matches a manifest artifact image line.
 var manifestImageLine = regexp.MustCompile(`(?m)^(\s+image: ).*$`)
@@ -40,7 +45,12 @@ func stampImageRef(manifest []byte, ref string) ([]byte, error) {
 	if !manifestImageLine.Match(manifest) {
 		return nil, errors.New("manifest declares no artifact image to stamp")
 	}
-	return manifestImageLine.ReplaceAll(manifest, []byte("${1}"+ref)), nil
+	// ReplaceAllFunc inserts ref verbatim. A template replacement would expand
+	// "$1" and "${name}" inside the reference and silently alter it.
+	return manifestImageLine.ReplaceAllFunc(manifest, func(line []byte) []byte {
+		prefix := manifestImageLine.FindSubmatch(line)[1]
+		return append(append([]byte{}, prefix...), ref...)
+	}), nil
 }
 
 // runSeed implements `collector seed --dest DIR`: it writes DIR/collector (a
@@ -51,8 +61,9 @@ func stampImageRef(manifest []byte, ref string) ([]byte, error) {
 //
 // The manifest cannot hold the digest of the image that carries it, so the
 // deployer passes the image it runs as --image-ref REF (or COLLECTOR_IMAGE_REF;
-// the flag wins). REF must be repository@sha256:<64 hex>; seed stamps it into
-// the seeded manifest's artifact image. Without it the repository placeholder
+// the flag wins). REF must be repository@sha256:<64 hex> (see imageRefPattern; one trailing
+// newline is trimmed); seed stamps it into the seeded manifest's artifact image
+// byte for byte, changing nothing else. Without it the repository placeholder
 // is written unchanged. An invalid REF exits 2 and the error never echoes it.
 func runSeed(args []string, stdout, stderr io.Writer, d deps) int {
 	flags := flag.NewFlagSet("collector seed", flag.ContinueOnError)
@@ -70,6 +81,8 @@ func runSeed(args []string, stdout, stderr io.Writer, d deps) int {
 	if ref == "" && d.getenv != nil {
 		ref = d.getenv(envImageRef)
 	}
+	// An environment variable often carries one trailing newline.
+	ref = strings.TrimSuffix(ref, "\n")
 	manifest := collector.ManifestYAML()
 	if ref != "" {
 		if !imageRefPattern.MatchString(ref) {

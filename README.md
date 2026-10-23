@@ -97,9 +97,12 @@ The host's `process.command` then points at the seeded `collector`.
 The manifest is embedded in the image it describes, so it cannot hold that
 image's digest. The deployer passes the image it runs instead:
 `--image-ref REF`, or the `COLLECTOR_IMAGE_REF` environment variable (the flag
-wins). `REF` must match `^[^@\s]+@sha256:[0-9a-f]{64}$`; seed stamps it into the
-seeded manifest's `artifacts[].image` and changes nothing else. A reference of
-any other shape exits non-zero without writing anything or echoing the value.
+wins). After one trailing newline is trimmed, `REF` must match
+`^[a-z0-9]+([._-][a-z0-9]+)*(:[0-9]+)?(/[a-z0-9]+([._-][a-z0-9]+)*)*@sha256:[0-9a-f]{64}$`,
+so it carries no quote, `$`, whitespace, or other YAML-significant character.
+Seed stamps it literally into the seeded manifest's `artifacts[].image` and
+changes nothing else. A reference of any other shape exits non-zero without
+writing anything or echoing the value.
 Without `REF`, the repository placeholder (an all-zero digest) is written
 unchanged. The `process` adapter runs the seeded binary and never pulls this
 image, so the stamp is provenance for the installed manifest.
