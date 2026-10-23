@@ -53,9 +53,5 @@ spec:
         - 1.0.0
       sourceConfidence:
         - reported
-  consumerContracts:
-    reducer:
-      phases:
-        - source_evidence_only:no_graph_truth
   telemetry:
     metricsPrefix: eshu_dp_pagerduty_collector_

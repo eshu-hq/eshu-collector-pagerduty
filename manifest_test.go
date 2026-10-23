@@ -62,8 +62,11 @@ func TestManifestReleaseProvenance(t *testing.T) {
 			t.Fatalf("fact kind %q has no source confidence", family.Kind)
 		}
 	}
-	if len(manifest.Spec.ConsumerContracts.Reducer.Phases) == 0 {
-		t.Fatal("manifest missing reducer consumer contract")
+	// These kinds are core-owned and feed real reducers, so the manifest must
+	// not claim the source_evidence_only:no_graph_truth phase, which would say
+	// the opposite. No phase is declared; the core grants decide consumption.
+	if phases := manifest.Spec.ConsumerContracts.Reducer.Phases; len(phases) != 0 {
+		t.Fatalf("manifest declares reducer phases %v, want none", phases)
 	}
 	if strings.TrimSpace(manifest.Spec.Telemetry.MetricsPrefix) == "" {
 		t.Fatal("manifest missing telemetry metrics prefix")
