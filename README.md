@@ -107,11 +107,43 @@ Without `REF`, the repository placeholder (an all-zero digest) is written
 unchanged. The `process` adapter runs the seeded binary and never pulls this
 image, so the stamp is provenance for the installed manifest.
 
-## Release
+## Releasing
 
-Nothing in this repository pushes an image or tags a release. Whatever deploys
-the image passes the digest of the image it runs to the init container as
-`COLLECTOR_IMAGE_REF` (or `--image-ref`). No commit needs to carry the digest.
+Only a pushed tag publishes an image. `.github/workflows/release.yml` runs on
+`v*` tags and nothing else, so pull requests and branch pushes publish nothing.
+It uses only the job's `GITHUB_TOKEN`, pins every action by commit SHA, and has
+no deploy step.
+
+1. Merge the change to `main`. The tag must match `metadata.version` in
+   `manifest.yaml` (`v0.1.0` for version `0.1.0`; a `-rc1` style suffix is
+   allowed). Bump the manifest version in the same PR.
+2. Tag the merged commit and push the tag: `git tag v0.1.0 && git push origin v0.1.0`.
+3. The workflow builds `linux/amd64` only, pushes
+   `ghcr.io/eshu-hq/eshu-collector-pagerduty:<tag>`, and writes the digest into
+   the job summary. It signs the digest with cosign (keyless), attests SLSA
+   build provenance, attests an SPDX SBOM, verifies all three, and fails if the
+   package cannot be pulled anonymously.
+4. Copy the digest from the job summary into the activation's `seed.image`
+   (`ghcr.io/eshu-hq/eshu-collector-pagerduty@sha256:<digest>`). The init
+   container passes the same reference to `collector seed` as
+   `COLLECTOR_IMAGE_REF` (or `--image-ref`), which stamps it into the seeded
+   manifest. No commit needs to carry the digest.
+
+The package must be **public**: the activation pulls it without a token. A new
+GHCR package starts private, so after the first release set its visibility to
+public in the package settings and re-run the job; the last step checks it.
+
+Verify a release before using it:
+
+```sh
+cosign verify ghcr.io/eshu-hq/eshu-collector-pagerduty@sha256:<digest> \
+  --certificate-identity https://github.com/eshu-hq/eshu-collector-pagerduty/.github/workflows/release.yml@refs/tags/v0.1.0 \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+gh attestation verify oci://ghcr.io/eshu-hq/eshu-collector-pagerduty@sha256:<digest> \
+  -R eshu-hq/eshu-collector-pagerduty
+gh attestation verify oci://ghcr.io/eshu-hq/eshu-collector-pagerduty@sha256:<digest> \
+  -R eshu-hq/eshu-collector-pagerduty --predicate-type https://spdx.dev/Document/v2.3
+```
 
 ## Develop
 
@@ -145,7 +177,8 @@ docker build -t eshu-collector-pagerduty:local .
   returns `retryable` with `claim_deadline_exceeded` and no facts, never
   `partial`, so an incomplete read is not committed. If every attempt ends that
   way, raise the worker lease TTL. An activation that replaces the in-tree
-  collector should set it to at least 5 m. No timing proof against a
+  collector should set it to at least the lease TTL the in-tree collector ran
+  with (5 m in the reference deployment). No timing proof against a
   production-sized account exists yet.
 - **No OpenTelemetry.** The process runner has no metrics endpoint. Operators
   read the host's recorded statuses (failure class, fact count, warning count,
