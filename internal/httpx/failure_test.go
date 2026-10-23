@@ -22,11 +22,21 @@ func TestClassifyStatus(t *testing.T) {
 		class    FailureClass
 		terminal bool
 	}{
-		{401, FailureAuthDenied, true}, {403, FailureAuthDenied, true}, {404, FailureNotFound, true},
-		{410, FailureTerminal, true}, {400, FailureTerminal, true}, {422, FailureTerminal, true},
-		{408, FailureRateLimited, false}, {409, FailureRateLimited, false}, {425, FailureRateLimited, false}, {429, FailureRateLimited, false},
-		{500, FailureRetryable, false}, {503, FailureRetryable, false},
-		{301, FailureTerminal, true}, {302, FailureTerminal, true}, {308, FailureTerminal, true},
+		{401, FailureAuthDenied, true},
+		{403, FailureAuthDenied, true},
+		{404, FailureNotFound, true},
+		{410, FailureTerminal, true},
+		{400, FailureTerminal, true},
+		{422, FailureTerminal, true},
+		{408, FailureRateLimited, false},
+		{409, FailureRateLimited, false},
+		{425, FailureRateLimited, false},
+		{429, FailureRateLimited, false},
+		{500, FailureRetryable, false},
+		{503, FailureRetryable, false},
+		{301, FailureTerminal, true},
+		{302, FailureTerminal, true},
+		{308, FailureTerminal, true},
 		{0, FailureRetryable, false},
 	}
 	for _, test := range tests {

@@ -32,16 +32,27 @@ func TestStableIDMatchesInTreeGoldens(t *testing.T) {
 		{"aws resource", "aws_resource", map[string]any{
 			"account_id": "111122223333", "arn": "arn:aws:s3:::example-bucket", "region": "us-east-1",
 		}, "0d30a784e7a8eeefa058bc98a048eb56659409ad2cf2bc18284c2da969548301"},
-		{"empty identity", "empty_identity", map[string]any{},
-			"0d9d6eec7c0474da6346f8c0827ac4813a7846b2d667af98676a1dd156f8db62"},
-		{"incident.record", "incident.record", pd("pagerduty:acct-1", "PINC1"),
-			"bd374e1e6d9160ddd98779e6edb84fa15f3f213d628010e86fe88fb113def4a1"},
-		{"change.record", "change.record", pd("pagerduty:acct-1", "PCHG1"),
-			"3b471d0add73951fbf039fcee81bfde2b5be000ecf5da1e5f7714762ff3b497a"},
-		{"observed service", "incident_routing.observed_pagerduty_service", pd("pagerduty:acct-1", "PSVC1"),
-			"0e0d5f4a3e5248346acc1c2fb83cb5d9d6fedb29133a88113dadbd46f481fbc6"},
-		{"observed integration", "incident_routing.observed_pagerduty_integration", pd("pagerduty:acct-1", "PSVC1:PINT1"),
-			"374bd2ab736af3b367df16d4554f962a0b86411bf0f95a6a8ed0263a7a59c145"},
+		{
+			"empty identity", "empty_identity",
+			map[string]any{},
+			"0d9d6eec7c0474da6346f8c0827ac4813a7846b2d667af98676a1dd156f8db62",
+		},
+		{
+			"incident.record", "incident.record", pd("pagerduty:acct-1", "PINC1"),
+			"bd374e1e6d9160ddd98779e6edb84fa15f3f213d628010e86fe88fb113def4a1",
+		},
+		{
+			"change.record", "change.record", pd("pagerduty:acct-1", "PCHG1"),
+			"3b471d0add73951fbf039fcee81bfde2b5be000ecf5da1e5f7714762ff3b497a",
+		},
+		{
+			"observed service", "incident_routing.observed_pagerduty_service", pd("pagerduty:acct-1", "PSVC1"),
+			"0e0d5f4a3e5248346acc1c2fb83cb5d9d6fedb29133a88113dadbd46f481fbc6",
+		},
+		{
+			"observed integration", "incident_routing.observed_pagerduty_integration", pd("pagerduty:acct-1", "PSVC1:PINT1"),
+			"374bd2ab736af3b367df16d4554f962a0b86411bf0f95a6a8ed0263a7a59c145",
+		},
 		{"lifecycle event", "incident.lifecycle_event", map[string]any{
 			"provider": "pagerduty", "scope_id": "pagerduty:acct-1", "incident_id": "PINC1", "event_id": "PLOG1",
 		}, "bcd8bff0efb9f34f135e724861f617d03d324afd82fe0a1dccd829de77dec148"},
