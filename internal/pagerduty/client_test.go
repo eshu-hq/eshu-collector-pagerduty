@@ -342,3 +342,45 @@ func TestOperationForPath(t *testing.T) {
 		}
 	}
 }
+
+// TestCollectConfigEvidenceHostileListedServiceIDs proves a service identifier
+// returned by GET /services is never interpolated into the integrations path
+// unless it looks like a PagerDuty ID. That request carries the API token, so
+// a hostile id such as "../x" must produce a warning and no request.
+func TestCollectConfigEvidenceHostileListedServiceIDs(t *testing.T) {
+	t.Parallel()
+
+	api := newStubAPI(t, map[string]route{
+		"/services": {body: `{"more":false,"services":[
+			{"id":"PGOOD1","name":"ok"},
+			{"id":"../x","name":"dotdot"},
+			{"id":"a/b","name":"slash"},
+			{"id":"PGOOD2?q=1","name":"query"}
+		]}`},
+		"/services/PGOOD1/integrations": {body: `{"more":false,"integrations":[{"id":"I1"}]}`},
+	})
+	result, err := newTestClient(t, api).CollectConfigEvidence(context.Background(), TargetConfig{ConfigValidationEnabled: true})
+	if err != nil {
+		t.Fatalf("CollectConfigEvidence() error = %v", err)
+	}
+	for _, path := range api.seen() {
+		if path != "/services" && path != "/services/PGOOD1/integrations" {
+			t.Fatalf("hostile service identifier reached a request path: %q (all: %v)", path, api.seen())
+		}
+	}
+	if len(result.Services) != 4 || len(result.Integrations) != 1 {
+		t.Fatalf("services/integrations = %d/%d, want 4/1", len(result.Services), len(result.Integrations))
+	}
+	// The warning carries no resource id, so a hostile value is not echoed.
+	want := []string{
+		"service_integration//unsupported",
+		"service_integration//unsupported",
+		"service_integration//unsupported",
+	}
+	if got := warningKeys(result.Warnings); !reflect.DeepEqual(got, want) {
+		t.Fatalf("warnings = %v, want %v", got, want)
+	}
+	if !result.Partial {
+		t.Fatal("Partial = false, want true")
+	}
+}
