@@ -1,0 +1,15 @@
+{
+  "case": "empty-account",
+  "facts": [],
+  "generation": {
+    "freshness_hint": "3b884fff00b0383e73569e3fc1d361f9f9b074d4c6ee0ab817528dd11642c14f",
+    "id": "generation-1",
+    "observed_at": "2026-10-20T12:00:00Z",
+    "trusted_deletion": false
+  },
+  "scope": {
+    "id": "pagerduty:account:synthetic-1",
+    "kind": "pagerduty_account"
+  },
+  "unchanged": false
+}

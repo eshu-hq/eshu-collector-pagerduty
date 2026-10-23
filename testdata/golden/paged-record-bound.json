@@ -1,0 +1,142 @@
+{
+  "case": "paged-record-bound",
+  "facts": [
+    {
+      "generation_id": "generation-1",
+      "kind": "incident.record",
+      "observed_at": "2026-10-20T12:00:00Z",
+      "payload": {
+        "assignments": null,
+        "collector_instance_id": "pagerduty-primary",
+        "created_at": "2026-10-20T08:00:00Z",
+        "escalation_policy": null,
+        "incident_number": 10,
+        "priority": null,
+        "provider": "pagerduty",
+        "provider_incident_id": "PINC10",
+        "resolved_at": "",
+        "service": {
+          "id": "PSVC1",
+          "summary": "svc",
+          "type": "service_reference"
+        },
+        "service_id": "PSVC1",
+        "source_url": "https://pagerduty.example.invalid",
+        "status": "resolved",
+        "teams": null,
+        "title": "one",
+        "updated_at": "",
+        "urgency": "low"
+      },
+      "schema_version": "1.0.0",
+      "scope_id": "pagerduty:account:synthetic-1",
+      "source_confidence": "reported",
+      "source_record_id": "PINC10",
+      "source_uri": "https://pagerduty.example.invalid",
+      "stable_key": "4486a0d9b890559f414019e1f6ad45ca4681044a248b4afaecca2d71afa07549"
+    },
+    {
+      "generation_id": "generation-1",
+      "kind": "incident.record",
+      "observed_at": "2026-10-20T12:00:00Z",
+      "payload": {
+        "assignments": null,
+        "collector_instance_id": "pagerduty-primary",
+        "created_at": "2026-10-20T08:10:00Z",
+        "escalation_policy": null,
+        "incident_number": 11,
+        "priority": null,
+        "provider": "pagerduty",
+        "provider_incident_id": "PINC11",
+        "resolved_at": "",
+        "service": {
+          "id": "PSVC1",
+          "summary": "svc",
+          "type": "service_reference"
+        },
+        "service_id": "PSVC1",
+        "source_url": "https://pagerduty.example.invalid",
+        "status": "resolved",
+        "teams": null,
+        "title": "two",
+        "updated_at": "",
+        "urgency": "low"
+      },
+      "schema_version": "1.0.0",
+      "scope_id": "pagerduty:account:synthetic-1",
+      "source_confidence": "reported",
+      "source_record_id": "PINC11",
+      "source_uri": "https://pagerduty.example.invalid",
+      "stable_key": "c17b0ecf2a6957395bd2134d2fbc6474402569ac9462f2e669d51d41cae55936"
+    },
+    {
+      "generation_id": "generation-1",
+      "kind": "incident.record",
+      "observed_at": "2026-10-20T12:00:00Z",
+      "payload": {
+        "assignments": null,
+        "collector_instance_id": "pagerduty-primary",
+        "created_at": "2026-10-20T08:20:00Z",
+        "escalation_policy": null,
+        "incident_number": 12,
+        "priority": null,
+        "provider": "pagerduty",
+        "provider_incident_id": "PINC12",
+        "resolved_at": "",
+        "service": {
+          "id": "PSVC1",
+          "summary": "svc",
+          "type": "service_reference"
+        },
+        "service_id": "PSVC1",
+        "source_url": "https://pagerduty.example.invalid",
+        "status": "resolved",
+        "teams": null,
+        "title": "three",
+        "updated_at": "",
+        "urgency": "low"
+      },
+      "schema_version": "1.0.0",
+      "scope_id": "pagerduty:account:synthetic-1",
+      "source_confidence": "reported",
+      "source_record_id": "PINC12",
+      "source_uri": "https://pagerduty.example.invalid",
+      "stable_key": "d7b898fa5c84faef4097e85ce2c6eb31e9df23cf286bf94fd325604f728c040d"
+    },
+    {
+      "generation_id": "generation-1",
+      "kind": "incident_routing.coverage_warning",
+      "observed_at": "2026-10-20T12:00:00Z",
+      "payload": {
+        "collector_instance_id": "pagerduty-primary",
+        "declared_match_state": "not_compared",
+        "outcome": "partial",
+        "provider": "pagerduty",
+        "provider_object_id": "",
+        "reason": "truncated",
+        "redaction_state": "none",
+        "resource_class": "incident",
+        "scope_id": "pagerduty:account:synthetic-1",
+        "source_class": "observed",
+        "source_kind": "pagerduty_api"
+      },
+      "schema_version": "1.0.0",
+      "scope_id": "pagerduty:account:synthetic-1",
+      "source_confidence": "reported",
+      "source_record_id": "truncated",
+      "source_uri": "https://pagerduty.example.invalid",
+      "stable_key": "7ee7df935c05031b687d48d8b3f4415cef1d9a07a131f356637b384c206c3377"
+    }
+  ],
+  "generation": {
+    "freshness_hint": "6f821609d2f4bf3a9c15a120b3576549891475c964d428888de8cbd22cefb066",
+    "id": "generation-1",
+    "observed_at": "2026-10-20T12:00:00Z",
+    "trusted_deletion": false
+  },
+  "scope": {
+    "id": "pagerduty:account:synthetic-1",
+    "kind": "pagerduty_account"
+  },
+  "unchanged": false
+}
