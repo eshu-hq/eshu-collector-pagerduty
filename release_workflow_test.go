@@ -5,6 +5,7 @@ package collector
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"regexp"
 	"strings"
@@ -13,7 +14,17 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// releasePermissions is the only permission set a release job may hold.
+const (
+	releaseImage      = "ghcr.io/eshu-hq/eshu-collector-pagerduty"
+	releaseDigestExpr = "${{ steps.build.outputs.digest }}"
+	releaseDigestRef  = releaseImage + "@" + releaseDigestExpr
+	releaseOIDCIssuer = "https://token.actions.githubusercontent.com"
+	releaseIdentity   = "https://github.com/${{ github.workflow_ref }}"
+)
+
+// releasePermissions is the exact permission set the release job must hold:
+// contents to read the tag, packages to push, id-token for keyless signing,
+// attestations to store provenance and the SBOM.
 var releasePermissions = map[string]string{
 	"contents":     "read",
 	"packages":     "write",
@@ -22,98 +33,250 @@ var releasePermissions = map[string]string{
 }
 
 var (
-	pinnedAction  = regexp.MustCompile(`^[\w./-]+@[0-9a-f]{40}$`)
-	secretRefs    = regexp.MustCompile(`secrets\.([A-Za-z0-9_]+)`)
-	platformRefs  = regexp.MustCompile(`linux/[a-z0-9]+`)
-	githubInRunRe = regexp.MustCompile(`\$\{\{\s*github\.`)
+	pinnedAction     = regexp.MustCompile(`^[\w./-]+@[0-9a-f]{40}$`)
+	secretRefs       = regexp.MustCompile(`secrets\.([A-Za-z0-9_]+)`)
+	platformRefs     = regexp.MustCompile(`linux/[a-z0-9]+`)
+	platformLine     = regexp.MustCompile(`(?m)^\s*platforms: linux/amd64$`)
+	expressionInRun  = regexp.MustCompile(`\$\{\{|format\(|github\.token`)
+	weakVerifyFlags  = []string{"-regexp", "--insecure", "--allow-insecure", "--private-infrastructure"}
+	attestVerifyFlag = "gh attestation verify"
 )
 
-// releaseWorkflowViolations returns every way raw breaks the release
-// workflow contract: it runs only on pushed v* tags, holds minimal
-// permissions, pins every action by commit SHA, uses no secret except
-// GITHUB_TOKEN, builds linux/amd64 only, never interpolates github context
-// into a shell script, and signs and attests what it pushes.
-func releaseWorkflowViolations(raw []byte) []string {
-	var workflow struct {
-		On          map[string]map[string]any `yaml:"on"`
-		Permissions map[string]string         `yaml:"permissions"`
-		Jobs        map[string]struct {
-			Permissions map[string]string `yaml:"permissions"`
-			Steps       []struct {
-				Uses string `yaml:"uses"`
-				Run  string `yaml:"run"`
-			} `yaml:"steps"`
-		} `yaml:"jobs"`
+type workflowStep struct {
+	Name string            `yaml:"name"`
+	ID   string            `yaml:"id"`
+	Uses string            `yaml:"uses"`
+	Run  string            `yaml:"run"`
+	Env  map[string]string `yaml:"env"`
+	With map[string]any    `yaml:"with"`
+}
+
+type workflowJob struct {
+	Permissions map[string]string `yaml:"permissions"`
+	Env         map[string]string `yaml:"env"`
+	Steps       []workflowStep    `yaml:"steps"`
+}
+
+type releaseWorkflow struct {
+	On          map[string]map[string]any `yaml:"on"`
+	Permissions map[string]string         `yaml:"permissions"`
+	Jobs        map[string]workflowJob    `yaml:"jobs"`
+}
+
+// contract collects violations so one run reports every broken rule.
+type contract struct{ violations []string }
+
+func (c *contract) add(format string, args ...any) {
+	c.violations = append(c.violations, fmt.Sprintf(format, args...))
+}
+
+func (c *contract) need(ok bool, format string, args ...any) {
+	if !ok {
+		c.add(format, args...)
 	}
+}
+
+// with returns the trimmed text of one with: input, or "" when it is unset.
+func (s workflowStep) with(key string) string {
+	value, ok := s.With[key]
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(fmt.Sprint(value))
+}
+
+func findStep(steps []workflowStep, match func(workflowStep) bool) (workflowStep, bool) {
+	for _, step := range steps {
+		if match(step) {
+			return step, true
+		}
+	}
+	return workflowStep{}, false
+}
+
+func stepRunning(steps []workflowStep, fragment string) (workflowStep, bool) {
+	return findStep(steps, func(s workflowStep) bool { return strings.Contains(s.Run, fragment) })
+}
+
+func stepUsing(steps []workflowStep, actionPrefix string) (workflowStep, bool) {
+	return findStep(steps, func(s workflowStep) bool { return strings.HasPrefix(s.Uses, actionPrefix) })
+}
+
+// releaseWorkflowViolations returns every way raw breaks the release
+// workflow contract. The contract bounds the workflow (it runs only on pushed
+// v* tags, holds exactly the permissions it needs, pins every action by commit
+// SHA, uses no secret except GITHUB_TOKEN, builds linux/amd64 only, and never
+// puts an expression in a shell script) and it requires the supply-chain
+// steps: the tag guard, the build, provenance and SBOM attestations pushed to
+// the registry, a keyless cosign signature by digest, and verification of all
+// of it, ending with the anonymous-pull check.
+func releaseWorkflowViolations(raw []byte) []string {
+	var workflow releaseWorkflow
 	if err := yaml.Unmarshal(raw, &workflow); err != nil {
 		return []string{fmt.Sprintf("workflow does not parse: %v", err)}
 	}
-	var violations []string
-	add := func(format string, args ...any) { violations = append(violations, fmt.Sprintf(format, args...)) }
+	c := &contract{}
+	var steps []workflowStep
+	for _, job := range workflow.Jobs {
+		steps = append(steps, job.Steps...)
+	}
+	checkTriggers(c, workflow)
+	checkPermissions(c, workflow)
+	checkStepHygiene(c, workflow, steps)
+	checkRawText(c, string(raw))
+	checkBuild(c, steps)
+	checkAttestations(c, steps)
+	checkSigning(c, steps)
+	checkGuards(c, workflow, steps)
+	return c.violations
+}
 
-	if len(workflow.On) != 1 {
-		add("trigger set has %d events, want only push", len(workflow.On))
-	}
+func checkTriggers(c *contract, workflow releaseWorkflow) {
+	c.need(len(workflow.On) == 1, "trigger set has %d events, want only push", len(workflow.On))
 	push, ok := workflow.On["push"]
-	if !ok {
-		add("workflow does not run on push")
-	}
+	c.need(ok, "workflow does not run on push")
 	tags, _ := push["tags"].([]any)
 	if len(tags) != 1 || fmt.Sprint(tags[0]) != "v*" || len(push) != 1 {
-		add("push trigger is %v, want only tags: [v*]", push)
+		c.add("push trigger is %v, want only tags: [v*]", push)
 	}
-	for key, level := range workflow.Permissions {
-		if key != "contents" || level != "read" {
-			add("top-level permission %s: %s is more than contents: read", key, level)
-		}
-	}
-	if len(workflow.Jobs) == 0 {
-		add("workflow has no jobs")
-	}
-	var text strings.Builder
+}
+
+func checkPermissions(c *contract, workflow releaseWorkflow) {
+	want := map[string]string{"contents": "read"}
+	c.need(maps.Equal(workflow.Permissions, want), "top-level permissions are %v, want exactly %v", workflow.Permissions, want)
+	c.need(len(workflow.Jobs) > 0, "workflow has no jobs")
 	for name, job := range workflow.Jobs {
-		if len(job.Permissions) == 0 {
-			add("job %s sets no explicit permissions", name)
+		c.need(maps.Equal(job.Permissions, releasePermissions),
+			"job %s permissions are %v, want exactly %v", name, job.Permissions, releasePermissions)
+	}
+}
+
+func checkStepHygiene(c *contract, workflow releaseWorkflow, steps []workflowStep) {
+	_, hasCheckout := stepUsing(steps, "actions/checkout@")
+	c.need(hasCheckout, "workflow never checks out the tagged commit")
+	for _, step := range steps {
+		if step.Uses != "" && !pinnedAction.MatchString(step.Uses) {
+			c.add("step uses %q, want a commit-SHA pin", step.Uses)
 		}
-		for key, level := range job.Permissions {
-			if releasePermissions[key] != level {
-				add("job %s permission %s: %s is outside the allowed set", name, key, level)
-			}
-		}
-		for _, step := range job.Steps {
-			text.WriteString(step.Uses + "\n" + step.Run + "\n")
-			if step.Uses != "" && !pinnedAction.MatchString(step.Uses) {
-				add("job %s uses %q, want a commit-SHA pin", name, step.Uses)
-			}
-			if githubInRunRe.MatchString(step.Run) {
-				add("job %s interpolates github context into a shell script; pass it through env", name)
-			}
+		if expressionInRun.MatchString(step.Run) {
+			c.add("step %q puts an expression in a shell script; pass it through env", step.Name)
 		}
 	}
-	for _, match := range secretRefs.FindAllStringSubmatch(string(raw), -1) {
+	tagEnv := false
+	for _, job := range workflow.Jobs {
+		tagEnv = tagEnv || job.Env["TAG_NAME"] == "${{ github.ref_name }}"
+	}
+	c.need(tagEnv, "no job sets TAG_NAME from github.ref_name in env")
+}
+
+func checkRawText(c *contract, body string) {
+	for _, match := range secretRefs.FindAllStringSubmatch(body, -1) {
 		if match[1] != "GITHUB_TOKEN" {
-			add("workflow references secret %s; only GITHUB_TOKEN is allowed", match[1])
+			c.add("workflow references secret %s; only GITHUB_TOKEN is allowed", match[1])
 		}
 	}
-	for _, platform := range platformRefs.FindAllString(string(raw), -1) {
-		if platform != "linux/amd64" {
-			add("workflow mentions platform %s; the release is linux/amd64 only", platform)
-		}
+	for _, platform := range platformRefs.FindAllString(body, -1) {
+		c.need(platform == "linux/amd64", "workflow mentions platform %s; the release is linux/amd64 only", platform)
 	}
-	body := string(raw)
-	for _, required := range []string{
-		"platforms: linux/amd64",
-		"push: true",
-		"cosign sign --yes",
-		"actions/attest-build-provenance@",
-		"sbom-path:",
-		"GITHUB_STEP_SUMMARY",
+	c.need(platformLine.MatchString(body), "workflow has no whole line %q", "platforms: linux/amd64")
+	c.need(!strings.Contains(body, ":latest"), "workflow mentions a :latest tag; every reference is by digest or version")
+	c.need(strings.Contains(body, "GITHUB_STEP_SUMMARY"), "workflow never writes the digest to GITHUB_STEP_SUMMARY")
+}
+
+func checkBuild(c *contract, steps []workflowStep) {
+	build, ok := findStep(steps, func(s workflowStep) bool { return s.ID == "build" })
+	if !ok || !strings.HasPrefix(build.Uses, "docker/build-push-action@") {
+		c.add("no docker/build-push-action step has id build")
+		return
+	}
+	c.need(build.with("platforms") == "linux/amd64", "build platforms is %q, want exactly linux/amd64", build.with("platforms"))
+	c.need(build.with("push") == "true", "build push is %q, want true", build.with("push"))
+}
+
+func checkAttestations(c *contract, steps []workflowStep) {
+	provenance, ok := stepUsing(steps, "actions/attest-build-provenance@")
+	if !ok {
+		c.add("workflow has no actions/attest-build-provenance step")
+	} else {
+		c.need(provenance.with("subject-name") == releaseImage, "provenance subject-name is %q", provenance.with("subject-name"))
+		c.need(provenance.with("subject-digest") == releaseDigestExpr, "provenance subject-digest is %q, want the build digest", provenance.with("subject-digest"))
+		c.need(provenance.with("push-to-registry") == "true", "provenance push-to-registry is %q, want true", provenance.with("push-to-registry"))
+	}
+	generate, ok := stepUsing(steps, "anchore/sbom-action@")
+	attest, attested := stepUsing(steps, "actions/attest@")
+	if !ok || !attested {
+		c.add("workflow needs an anchore/sbom-action step and an actions/attest step for the SBOM")
+		return
+	}
+	c.need(generate.with("image") == releaseDigestRef, "SBOM image is %q, want the pushed digest", generate.with("image"))
+	c.need(generate.with("format") == "spdx-json", "SBOM format is %q, want spdx-json", generate.with("format"))
+	c.need(attest.with("sbom-path") != "" && attest.with("sbom-path") == generate.with("output-file"),
+		"SBOM attestation reads %q, want the generated file %q", attest.with("sbom-path"), generate.with("output-file"))
+	c.need(attest.with("subject-name") == releaseImage, "SBOM attestation subject-name is %q", attest.with("subject-name"))
+	c.need(attest.with("subject-digest") == releaseDigestExpr, "SBOM attestation subject-digest is %q, want the build digest", attest.with("subject-digest"))
+	c.need(attest.with("push-to-registry") == "true", "SBOM attestation push-to-registry is %q, want true", attest.with("push-to-registry"))
+}
+
+func checkSigning(c *contract, steps []workflowStep) {
+	_, installed := stepUsing(steps, "sigstore/cosign-installer@")
+	c.need(installed, "workflow does not install cosign")
+	sign, ok := stepRunning(steps, "cosign sign")
+	if !ok {
+		c.add("workflow never runs cosign sign")
+	} else {
+		c.need(strings.TrimSpace(sign.Run) == `cosign sign --yes "${IMAGE_REF}"`, "cosign sign command is %q", strings.TrimSpace(sign.Run))
+		c.need(sign.Env["IMAGE_REF"] == releaseDigestRef, "cosign sign IMAGE_REF is %q, want the digest reference", sign.Env["IMAGE_REF"])
+	}
+	verify, ok := stepRunning(steps, "cosign verify")
+	if !ok {
+		c.add("workflow never runs cosign verify")
+		return
+	}
+	for _, want := range []string{
+		`cosign verify "${IMAGE_REF}"`,
+		`--certificate-identity "${CERTIFICATE_IDENTITY}"`,
+		`--certificate-oidc-issuer "` + releaseOIDCIssuer + `"`,
 	} {
-		if !strings.Contains(body, required) {
-			add("workflow lacks %q", required)
+		c.need(strings.Contains(verify.Run, want), "cosign verify lacks %q", want)
+	}
+	for _, weak := range weakVerifyFlags {
+		c.need(!strings.Contains(verify.Run, weak), "cosign verify uses the weakening flag %q", weak)
+	}
+	c.need(verify.Env["CERTIFICATE_IDENTITY"] == releaseIdentity, "CERTIFICATE_IDENTITY is %q, want %q", verify.Env["CERTIFICATE_IDENTITY"], releaseIdentity)
+	c.need(verify.Env["IMAGE_REF"] == releaseDigestRef, "cosign verify IMAGE_REF is %q, want the digest reference", verify.Env["IMAGE_REF"])
+}
+
+func checkGuards(c *contract, workflow releaseWorkflow, steps []workflowStep) {
+	tag, ok := stepRunning(steps, "manifest.yaml")
+	if !ok {
+		c.add("no step compares the tag with manifest.yaml")
+	} else {
+		for _, want := range []string{`test -n "${version}"`, `test "v${version}" = "${TAG_NAME%%-*}"`} {
+			c.need(strings.Contains(tag.Run, want), "tag guard lacks %q", want)
 		}
 	}
-	return violations
+	verifyAttest, ok := stepRunning(steps, attestVerifyFlag)
+	if !ok {
+		c.add("workflow never runs %q", attestVerifyFlag)
+	} else {
+		c.need(strings.Count(verifyAttest.Run, attestVerifyFlag) >= 2, "want %q for provenance and for the SBOM", attestVerifyFlag)
+		c.need(strings.Count(verifyAttest.Run, `-R "${GITHUB_REPOSITORY}"`) == strings.Count(verifyAttest.Run, attestVerifyFlag),
+			"every %q must pin the repository with -R", attestVerifyFlag)
+		c.need(strings.Contains(verifyAttest.Run, "--predicate-type") && strings.Contains(verifyAttest.Run, "spdx.dev/Document"),
+			"no %q checks the SPDX predicate", attestVerifyFlag)
+		c.need(verifyAttest.Env["OCI_IMAGE_REF"] == "oci://"+releaseDigestRef, "OCI_IMAGE_REF is %q, want the digest reference", verifyAttest.Env["OCI_IMAGE_REF"])
+	}
+	anonymous, ok := stepRunning(steps, "imagetools inspect")
+	if !ok {
+		c.add("workflow has no anonymous-pull check")
+		return
+	}
+	for _, want := range []string{`mktemp -d`, `DOCKER_CONFIG="${anonymous}"`, `imagetools inspect "${IMAGE_REF}"`, `exit 1`} {
+		c.need(strings.Contains(anonymous.Run, want), "anonymous-pull check lacks %q", want)
+	}
+	c.need(anonymous.Env["IMAGE_REF"] == releaseDigestRef, "anonymous-pull IMAGE_REF is %q, want the digest reference", anonymous.Env["IMAGE_REF"])
+	summary, ok := stepRunning(steps, "GITHUB_STEP_SUMMARY")
+	c.need(ok && summary.Env["DIGEST"] == releaseDigestExpr, "the summary step must record the build digest")
 }
 
 // TestReleaseWorkflowContract holds the real release workflow to the contract.
@@ -126,40 +289,5 @@ func TestReleaseWorkflowContract(t *testing.T) {
 	}
 	if violations := releaseWorkflowViolations(raw); len(violations) > 0 {
 		t.Fatalf("release.yml violations:\n%s", strings.Join(violations, "\n"))
-	}
-}
-
-// TestReleaseWorkflowContractCatchesSeededViolations plants one violation at a
-// time in the real workflow and requires the checker to flag it, so the gate
-// cannot pass vacuously.
-func TestReleaseWorkflowContractCatchesSeededViolations(t *testing.T) {
-	t.Parallel()
-
-	raw, err := os.ReadFile(".github/workflows/release.yml")
-	if err != nil {
-		t.Fatalf("os.ReadFile(release.yml) error = %v", err)
-	}
-	good := string(raw)
-	for name, test := range map[string]struct{ from, to string }{
-		"pull request trigger": {"on:\n  push:", "on:\n  pull_request:\n  push:"},
-		"branch trigger":       {"tags: [\"v*\"]", "tags: [\"v*\"]\n    branches: [main]"},
-		"wider tag glob":       {"tags: [\"v*\"]", "tags: [\"*\"]"},
-		"contents write":       {"contents: read\n      packages", "contents: write\n      packages"},
-		"extra permission":     {"id-token: write", "id-token: write\n      actions: write"},
-		"unpinned action":      {"uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262", "uses: actions/checkout@v4"},
-		"other secret":         {"secrets.GITHUB_TOKEN", "secrets.DEPLOY_KEY"},
-		"arm64 platform":       {"platforms: linux/amd64", "platforms: linux/amd64,linux/arm64"},
-		"no signing":           {"cosign sign --yes", "echo skip"},
-		"no sbom attestation":  {"sbom-path:", "predicate-path:"},
-		"no digest summary":    {"GITHUB_STEP_SUMMARY", "GITHUB_OUTPUT"},
-		"context in script":    {"run: cosign sign --yes", "run: echo ${{ github.ref_name }} && cosign sign --yes"},
-	} {
-		if !strings.Contains(good, test.from) {
-			t.Fatalf("%s: seed anchor %q is missing from release.yml; update the test", name, test.from)
-		}
-		mutated := strings.Replace(good, test.from, test.to, 1)
-		if len(releaseWorkflowViolations([]byte(mutated))) == 0 {
-			t.Errorf("%s: the checker accepted a seeded violation", name)
-		}
 	}
 }
