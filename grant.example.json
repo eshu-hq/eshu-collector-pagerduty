@@ -1,1 +1,8 @@
-{"expires_at":"2027-09-01T00:00:00Z","kind":"aws_resource","producer_id":"dev.eshu.collector.pagerduty","revoked":false,"schema_versions":["1.0.0"],"scope":"component:pagerduty-primary","version":"0.1.0"}
+[
+  {"producer_id": "dev.eshu.collector.pagerduty", "version": "0.1.0", "kind": "incident.record", "schema_versions": ["1.0.0"], "scope": "pagerduty", "expires_at": "2027-09-01T00:00:00Z", "revoked": false},
+  {"producer_id": "dev.eshu.collector.pagerduty", "version": "0.1.0", "kind": "incident.lifecycle_event", "schema_versions": ["1.0.0"], "scope": "pagerduty", "expires_at": "2027-09-01T00:00:00Z", "revoked": false},
+  {"producer_id": "dev.eshu.collector.pagerduty", "version": "0.1.0", "kind": "change.record", "schema_versions": ["1.0.0"], "scope": "pagerduty", "expires_at": "2027-09-01T00:00:00Z", "revoked": false},
+  {"producer_id": "dev.eshu.collector.pagerduty", "version": "0.1.0", "kind": "incident_routing.observed_pagerduty_service", "schema_versions": ["1.0.0"], "scope": "pagerduty", "expires_at": "2027-09-01T00:00:00Z", "revoked": false},
+  {"producer_id": "dev.eshu.collector.pagerduty", "version": "0.1.0", "kind": "incident_routing.observed_pagerduty_integration", "schema_versions": ["1.0.0"], "scope": "pagerduty", "expires_at": "2027-09-01T00:00:00Z", "revoked": false},
+  {"producer_id": "dev.eshu.collector.pagerduty", "version": "0.1.0", "kind": "incident_routing.coverage_warning", "schema_versions": ["1.0.0"], "scope": "pagerduty", "expires_at": "2027-09-01T00:00:00Z", "revoked": false}
+]
