@@ -12,6 +12,11 @@ host:
     kind: pagerduty_account
 process:
   command: /opt/eshu/components/dev.eshu.collector.pagerduty/collector
+  # The host kills this process at the claim deadline, which is the initial
+  # worker lease expiry (ESHU_COMPONENT_COLLECTOR_CLAIM_LEASE_TTL, default 60s;
+  # heartbeats do not extend it). The collector stops min(2s, 5% of the
+  # remaining time) earlier and returns retryable claim_deadline_exceeded, so
+  # set the worker lease TTL to at least 5m for a large account.
   # Raise this together with config.max_result_bytes if a large account needs
   # more than the 4 MiB default result.
   stdout_limit_bytes: 4194304

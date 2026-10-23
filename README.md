@@ -135,6 +135,18 @@ docker build -t eshu-collector-pagerduty:local .
   release that contains `Generation.TrustedDeletion` (added in eshu-hq/eshu commit
   `49205b1214`, after the v0.2.0 tag). Then bump the SDK pin, map the option onto
   the Result generation, and replace the fail-closed test.
+- **A claim has a hard time bound.** The host sets the claim deadline to the
+  initial lease expiry and kills the process there. The default worker lease TTL
+  is 60 s (`ESHU_COMPONENT_COLLECTOR_CLAIM_LEASE_TTL`), and heartbeats extend the
+  database lease, not this deadline. The collector reads PagerDuty sequentially
+  (two calls per incident, plus per-service calls when config validation is on),
+  so a large account can need more than 60 s. It therefore stops starting
+  provider calls `min(2 s, 5% of the remaining time)` before the deadline and
+  returns `retryable` with `claim_deadline_exceeded` and no facts, never
+  `partial`, so an incomplete read is not committed. If every attempt ends that
+  way, raise the worker lease TTL. An activation that replaces the in-tree
+  collector should set it to at least 5 m. No timing proof against a
+  production-sized account exists yet.
 - **No OpenTelemetry.** The process runner has no metrics endpoint. Operators
   read the host's recorded statuses (failure class, fact count, warning count,
   source latency) and the one health line this program writes to standard error.

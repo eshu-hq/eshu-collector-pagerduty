@@ -67,6 +67,33 @@ func (h Handler) now() time.Time {
 	return time.Now()
 }
 
+const (
+	// maxDeadlineMargin caps how long before the claim deadline the collector
+	// stops starting provider calls.
+	maxDeadlineMargin = 2 * time.Second
+	// deadlineMarginDivisor makes the margin 5% of the remaining claim time.
+	deadlineMarginDivisor = 20
+)
+
+// clampedDeadlineTimeout returns how long the collector may work on a claim:
+// the time left until deadline minus a safety margin of min(2s, 5% of the
+// time left). The host kills the process at the claim deadline, which is the
+// initial lease expiry and is not extended by heartbeats, so the collector
+// stops a little earlier and ends with a retryable result of its own instead
+// of being killed mid-request. It reports false when there is no deadline or
+// none left; the caller's expired-deadline check handles the latter.
+func clampedDeadlineTimeout(now, deadline time.Time) (time.Duration, bool) {
+	if deadline.IsZero() {
+		return 0, false
+	}
+	remaining := deadline.Sub(now)
+	if remaining <= 0 {
+		return 0, false
+	}
+	margin := min(maxDeadlineMargin, remaining/deadlineMarginDivisor)
+	return remaining - margin, true
+}
+
 // Handle runs one claim. It never returns an error: every outcome, including
 // a configuration problem or a provider failure, is a Result whose state the
 // host maps to a claim action. The returned claim equals the request claim, as
@@ -74,9 +101,9 @@ func (h Handler) now() time.Time {
 func (h Handler) Handle(ctx context.Context, request Request) (sdk.Result, Summary) {
 	claim := request.Claim
 	startedAt := h.now().UTC()
-	if !claim.Deadline.IsZero() {
+	if timeout, ok := clampedDeadlineTimeout(startedAt, claim.Deadline); ok {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithDeadline(ctx, claim.Deadline)
+		ctx, cancel = context.WithTimeout(ctx, timeout)
 		defer cancel()
 	}
 	finish := func(result sdk.Result, summary Summary) (sdk.Result, Summary) {

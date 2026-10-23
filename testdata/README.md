@@ -75,5 +75,8 @@ hostile or unusual input; each has its own unit test:
   (a superset of the in-tree list).
 - The source reference URI falls back to the API base URL when no usable URI
   remains, because the SDK requires one. The payload `source_url` is unchanged.
+- The collector honors the claim deadline: it stops `min(2s, 5%)` early and
+  returns `retryable` (`claim_deadline_exceeded`). The in-tree collector had no
+  per-claim process deadline; the host adds one here.
 - Integration facts carry an SDK `redactions` list naming the dropped key
   fields. The in-tree envelope has no such list.
