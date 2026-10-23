@@ -43,10 +43,10 @@ func TestManifestReleaseProvenance(t *testing.T) {
 			t.Fatalf("artifact image %q is not the eshu-collector-pagerduty GHCR image", artifact.Image)
 		}
 		// The manifest is embedded in the image it describes, so a build
-		// cannot carry its own digest. The all-zero placeholder is therefore
-		// valid in a source checkout and scripts/pin-digest.sh --write records
-		// the real digest in the next release commit. The process adapter
-		// executes the seeded binary and never pulls this image.
+		// cannot carry its own digest. The all-zero placeholder is valid in
+		// source: `collector seed --image-ref REF` stamps the deployed digest
+		// into the seeded copy. The process adapter executes the seeded
+		// binary and never pulls this image.
 	}
 	if len(manifest.Spec.EmittedFacts) == 0 {
 		t.Fatal("manifest declares no emitted facts")

@@ -49,6 +49,12 @@ jobs:
           docker run --rm -v "$PWD/seed-out:/seed" eshu-collector-pagerduty:ci seed --dest /seed
           test -x seed-out/collector
           cmp seed-out/manifest.yaml manifest.yaml
+      - name: Seed with a stamped image reference
+        run: |
+          ref="ghcr.io/eshu-hq/eshu-collector-pagerduty@sha256:$(printf 'ab%.0s' $(seq 32))"
+          docker run --rm -e COLLECTOR_IMAGE_REF="$ref" -v "$PWD/seed-out:/seed" eshu-collector-pagerduty:ci seed --dest /seed
+          [[ "$(cat seed-out/manifest.yaml)" == *"image: $ref"* ]]
+          if docker run --rm -v "$PWD/seed-out:/seed" eshu-collector-pagerduty:ci seed --dest /seed --image-ref not-a-digest; then exit 1; fi
 
   ci-complete:
     if: always()

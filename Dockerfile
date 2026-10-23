@@ -2,7 +2,10 @@
 # shell. The image is also the component's delivery artifact: an init container
 # runs `/collector seed --dest DIR` to copy the binary and its manifest into the
 # Eshu component home, and the host's process runner then executes the seeded
-# copy. Run with no arguments, the binary reads one collector-sdk/v1alpha1
+# copy. The manifest cannot hold the digest of the image that carries it, so the
+# deployer passes it with `--image-ref REPO@sha256:DIGEST` (or the
+# COLLECTOR_IMAGE_REF environment variable) and seed stamps it into the seeded
+# manifest. Run with no arguments, the binary reads one collector-sdk/v1alpha1
 # Request from standard input.
 #
 # Both base images are pinned by digest. Re-resolve them (docker buildx

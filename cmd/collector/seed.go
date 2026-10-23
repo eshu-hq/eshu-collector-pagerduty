@@ -13,6 +13,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 
 	collector "github.com/eshu-hq/eshu-collector-pagerduty"
 )
@@ -20,17 +21,44 @@ import (
 const (
 	seedBinaryName   = "collector"
 	seedManifestName = "manifest.yaml"
+	// envImageRef supplies the deployed image reference when --image-ref is
+	// not given. The flag wins.
+	envImageRef = "COLLECTOR_IMAGE_REF"
 )
+
+// imageRefPattern is the only reference shape seed will stamp into a
+// manifest: a repository, then a full sha256 digest.
+var imageRefPattern = regexp.MustCompile(`^[^@\s]+@sha256:[0-9a-f]{64}$`)
+
+// manifestImageLine matches a manifest artifact image line.
+var manifestImageLine = regexp.MustCompile(`(?m)^(\s+image: ).*$`)
+
+// stampImageRef returns manifest with every artifact image set to ref. It
+// fails when the manifest declares no artifact image, so a stamp can never be
+// silently dropped.
+func stampImageRef(manifest []byte, ref string) ([]byte, error) {
+	if !manifestImageLine.Match(manifest) {
+		return nil, errors.New("manifest declares no artifact image to stamp")
+	}
+	return manifestImageLine.ReplaceAll(manifest, []byte("${1}"+ref)), nil
+}
 
 // runSeed implements `collector seed --dest DIR`: it writes DIR/collector (a
 // byte copy of this executable, mode 0755) and DIR/manifest.yaml (the embedded
 // manifest, mode 0644). It is idempotent, so an init container can run it on
 // every pod start: a file that already holds the right bytes and mode is left
 // untouched, and a changed file is replaced atomically.
+//
+// The manifest cannot hold the digest of the image that carries it, so the
+// deployer passes the image it runs as --image-ref REF (or COLLECTOR_IMAGE_REF;
+// the flag wins). REF must be repository@sha256:<64 hex>; seed stamps it into
+// the seeded manifest's artifact image. Without it the repository placeholder
+// is written unchanged. An invalid REF exits 2 and the error never echoes it.
 func runSeed(args []string, stdout, stderr io.Writer, d deps) int {
 	flags := flag.NewFlagSet("collector seed", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	dest := flags.String("dest", "", "directory to write the collector binary and manifest.yaml into")
+	imageRef := flags.String("image-ref", "", "deployed image reference (repository@sha256:<digest>) to stamp into the seeded manifest; defaults to $"+envImageRef)
 	if err := flags.Parse(args); err != nil {
 		return 2
 	}
@@ -38,12 +66,29 @@ func runSeed(args []string, stdout, stderr io.Writer, d deps) int {
 		fmt.Fprintln(stderr, "collector: seed requires --dest DIR and takes no other arguments")
 		return 2
 	}
+	ref := *imageRef
+	if ref == "" && d.getenv != nil {
+		ref = d.getenv(envImageRef)
+	}
+	manifest := collector.ManifestYAML()
+	if ref != "" {
+		if !imageRefPattern.MatchString(ref) {
+			fmt.Fprintln(stderr, "collector: seed: image reference must be repository@sha256:<64 lowercase hex digits>")
+			return 2
+		}
+		stamped, err := stampImageRef(manifest, ref)
+		if err != nil {
+			fmt.Fprintf(stderr, "collector: seed: %v\n", err)
+			return 1
+		}
+		manifest = stamped
+	}
 	exe, err := d.executable()
 	if err != nil {
 		fmt.Fprintf(stderr, "collector: locate executable: %v\n", err)
 		return 1
 	}
-	report, err := seed(*dest, exe, collector.ManifestYAML())
+	report, err := seed(*dest, exe, manifest)
 	if err != nil {
 		fmt.Fprintf(stderr, "collector: seed: %v\n", err)
 		return 1

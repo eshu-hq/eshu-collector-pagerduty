@@ -88,7 +88,7 @@ The image is `ghcr.io/eshu-hq/eshu-collector-pagerduty`: one static binary at
 is also the delivery artifact. An init container runs:
 
 ```sh
-/collector seed --dest DIR
+/collector seed --dest DIR [--image-ref REPO@sha256:DIGEST]
 ```
 
 which writes `DIR/collector` (a byte copy of the binary, mode 0755) and
@@ -96,14 +96,21 @@ which writes `DIR/collector` (a byte copy of the binary, mode 0755) and
 holds the right bytes is left alone, and a changed file is replaced atomically.
 The host's `process.command` then points at the seeded `collector`.
 
+The manifest is embedded in the image it describes, so it cannot hold that
+image's digest. The deployer passes the image it runs instead:
+`--image-ref REF`, or the `COLLECTOR_IMAGE_REF` environment variable (the flag
+wins). `REF` must match `^[^@\s]+@sha256:[0-9a-f]{64}$`; seed stamps it into the
+seeded manifest's `artifacts[].image` and changes nothing else. A reference of
+any other shape exits non-zero without writing anything or echoing the value.
+Without `REF`, the repository placeholder (an all-zero digest) is written
+unchanged. The `process` adapter runs the seeded binary and never pulls this
+image, so the stamp is provenance for the installed manifest.
+
 ## Release
 
-The manifest is embedded in the image it describes, so a build cannot carry its
-own digest. `manifest.yaml` ships an all-zero placeholder digest in source. After
-a release is pushed, `scripts/pin-digest.sh <repo:tag> --write` records the real
-digest, and the next release commit carries it. The `process` adapter executes
-the seeded binary and never pulls this image. Nothing in this repository pushes
-an image or tags a release.
+Nothing in this repository pushes an image or tags a release. Whatever deploys
+the image passes the digest of the image it runs to the init container as
+`COLLECTOR_IMAGE_REF` (or `--image-ref`). No commit needs to carry the digest.
 
 ## Develop
 
