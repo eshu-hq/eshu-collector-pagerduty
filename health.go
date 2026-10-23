@@ -17,7 +17,7 @@ type Health struct {
 	// Alive is true once the process has started and its config validated.
 	Alive bool `json:"alive"`
 	// LastSuccessAt is the last complete-claim timestamp, zero when none.
-	LastSuccessAt time.Time `json:"last_success_at,omitempty"`
+	LastSuccessAt time.Time `json:"last_success_at,omitzero"`
 	// LastDigest is the last emitted report digest for freshness comparison.
 	LastDigest string `json:"last_digest,omitempty"`
 	// ConsecutiveFailures counts failures since the last success.

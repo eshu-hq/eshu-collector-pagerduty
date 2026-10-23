@@ -8,12 +8,13 @@ on:
 permissions:
   contents: read
 
+# Actions are pinned to commit SHAs; the comment names the release.
 jobs:
   vet:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
       - run: go vet ./...
@@ -21,8 +22,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
       - run: go test -race -count=1 ./...
@@ -30,15 +31,28 @@ jobs:
   boundary:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: go.mod
       - run: go test -count=1 -run TestImportBoundaryRejectsCoreAndCrossCollectorImports .
 
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Build the image without pushing it
+        run: docker build --tag eshu-collector-pagerduty:ci .
+      - name: Seed from the image into an empty directory
+        run: |
+          mkdir seed-out && chmod 777 seed-out
+          docker run --rm -v "$PWD/seed-out:/seed" eshu-collector-pagerduty:ci seed --dest /seed
+          test -x seed-out/collector
+          cmp seed-out/manifest.yaml manifest.yaml
+
   ci-complete:
     if: always()
-    needs: [vet, test, boundary]
+    needs: [vet, test, boundary, image]
     runs-on: ubuntu-latest
     steps:
       - name: Require every job to succeed
@@ -46,3 +60,4 @@ jobs:
           test "${{ needs.vet.result }}" = "success"
           test "${{ needs.test.result }}" = "success"
           test "${{ needs.boundary.result }}" = "success"
+          test "${{ needs.image.result }}" = "success"

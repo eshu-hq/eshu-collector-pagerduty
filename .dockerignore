@@ -1,0 +1,7 @@
+.git
+.github
+CODEOWNERS
+testdata
+scripts
+*.md
+!manifest.yaml
