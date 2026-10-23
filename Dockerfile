@@ -14,6 +14,5 @@ RUN CGO_ENABLED=0 go build -trimpath -ldflags='-s -w' -o /out/collector ./cmd/co
 FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
 COPY --from=build /out/collector /usr/local/bin/collector
 COPY manifest.yaml /etc/collector/manifest.yaml
-COPY testdata/complete.json /var/lib/collector/complete.json
 USER 65532:65532
 ENTRYPOINT ["/usr/local/bin/collector", "--sdk-stdio"]

@@ -1,0 +1,6 @@
+{
+  "description": "Synthetic account with no incidents inside the collection window.",
+  "responses": [
+    {"path": "/incidents", "body": {"more": false, "incidents": []}}
+  ]
+}

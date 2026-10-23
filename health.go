@@ -32,17 +32,15 @@ type Health struct {
 
 // ResourceUse reports bounded cost for operator dashboards.
 type ResourceUse struct {
-	// MaxRecordsPerClaim bounds one claim's fact emission.
-	MaxRecordsPerClaim int `json:"max_records_per_claim"`
-	// MaxPayloadBytes bounds one emitted payload.
-	MaxPayloadBytes int `json:"max_payload_bytes"`
-	// ClaimTimeoutSeconds bounds one claim's wall time.
-	ClaimTimeoutSeconds int `json:"claim_timeout_seconds"`
+	// MaxResultBytes bounds one claim's encoded result. A result over the
+	// bound fails terminal with result_too_large instead of reaching the
+	// host's standard-output limit.
+	MaxResultBytes int `json:"max_result_bytes"`
 }
 
-// DefaultResourceUse is the scaffold's starting bound. Tune it per source.
+// DefaultResourceUse is the collector's starting bound.
 func DefaultResourceUse() ResourceUse {
-	return ResourceUse{MaxRecordsPerClaim: 5000, MaxPayloadBytes: 65536, ClaimTimeoutSeconds: 300}
+	return ResourceUse{MaxResultBytes: DefaultMaxResultBytes}
 }
 
 // Monitor is a goroutine-safe health tracker for one collector process.

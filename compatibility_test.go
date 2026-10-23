@@ -30,8 +30,8 @@ func TestCompatibilityMatrixSupportedPair(t *testing.T) {
 	if hostRejectsCoreRange(manifest.Spec.CompatibleCore, "0.1.0") {
 		t.Fatalf("pinned range %q must cover supported core 0.1.0", manifest.Spec.CompatibleCore)
 	}
-	result := mustCollect(t, "complete.json", testClaim(), testObservedAt(), "")
-	report := conformance.Run(conformance.Request{Manifest: manifest, Fixtures: []sdk.Result{result}, Mode: conformance.ModeFixture})
+	result := mustFixtureResult(t)
+	report := conformance.Run(conformance.Request{Manifest: manifest, Fixtures: []sdk.Result{result}, Mode: conformance.ModeFixture, PayloadSchemas: payloadSchemas(t, manifest)})
 	if !report.OK() {
 		t.Fatalf("supported pair findings = %#v, want passed", report.Findings)
 	}
@@ -44,7 +44,7 @@ func TestCompatibilityMatrixRejectsUnsupportedVersions(t *testing.T) {
 	t.Parallel()
 
 	manifest := loadManifestForMatrix(t)
-	complete := mustCollect(t, "complete.json", testClaim(), testObservedAt(), "")
+	complete := mustFixtureResult(t)
 
 	unsupportedProtocol := complete
 	unsupportedProtocol.ProtocolVersion = "collector-sdk/v9alpha9"

@@ -8,41 +8,32 @@ import (
 	"time"
 )
 
-// TestOperatorHealth proves operators can inspect liveness, freshness,
-// retries, failures, and bounded resource use.
-func TestOperatorHealth(t *testing.T) {
+func TestMonitorTracksSuccessFailureAndBoundedRetry(t *testing.T) {
 	t.Parallel()
 
 	monitor := NewMonitor()
 	health, resource := monitor.Snapshot()
-	if !health.Alive {
-		t.Fatal("Alive = false, want true")
+	if !health.Alive || resource.MaxResultBytes != DefaultMaxResultBytes {
+		t.Fatalf("initial snapshot = %+v / %+v", health, resource)
 	}
-	if resource.MaxRecordsPerClaim <= 0 || resource.MaxPayloadBytes <= 0 || resource.ClaimTimeoutSeconds <= 0 {
-		t.Fatalf("resource bounds unset: %+v", resource)
-	}
-	at := time.Date(2026, time.September, 1, 0, 0, 0, 0, time.UTC)
-	monitor.ObserveSuccess("digest-1", at)
-	monitor.ObserveFailure("transient source timeout")
+	monitor.ObserveFailure("auth_denied")
+	monitor.ObserveFailure("auth_denied")
 	health, _ = monitor.Snapshot()
-	if !health.LastSuccessAt.Equal(at) {
-		t.Fatalf("LastSuccessAt = %v, want %v", health.LastSuccessAt, at)
+	if health.ConsecutiveFailures != 2 || health.LastError != "auth_denied" {
+		t.Fatalf("after failures = %+v", health)
 	}
-	if health.LastDigest != "digest-1" {
-		t.Fatalf("LastDigest = %q, want digest-1", health.LastDigest)
-	}
-	if health.ConsecutiveFailures != 1 {
-		t.Fatalf("ConsecutiveFailures = %d, want 1", health.ConsecutiveFailures)
-	}
-	if health.LastError == "" {
-		t.Fatal("LastError empty after failure")
+	at := time.Date(2026, 10, 20, 12, 0, 0, 0, time.FixedZone("x", 3600))
+	monitor.ObserveSuccess("hint-1", at)
+	health, _ = monitor.Snapshot()
+	if health.ConsecutiveFailures != 0 || health.LastError != "" || health.LastDigest != "hint-1" || !health.LastSuccessAt.Equal(at) {
+		t.Fatalf("after success = %+v", health)
 	}
 	for i := 0; i < 8; i++ {
 		if err := monitor.ObserveRetryNevertheless(); err != nil {
-			t.Fatalf("ObserveRetryNevertheless() error = %v on iteration %d", err, i)
+			t.Fatalf("retry %d error = %v", i, err)
 		}
 	}
 	if err := monitor.ObserveRetryNevertheless(); err == nil {
-		t.Fatal("retry past the bound must fail terminal")
+		t.Fatal("the ninth queued retry must exceed the bound")
 	}
 }

@@ -17,17 +17,38 @@ spec:
     - platform: linux/amd64
       image: ghcr.io/eshu-hq/eshu-collector-pagerduty@sha256:0000000000000000000000000000000000000000000000000000000000000000
   emittedFacts:
-    - kind: dev.eshu.collector.pagerduty.snapshot
+    - kind: incident.record
+      payloadSchemaRef: incident.record
       schemaVersions:
         - 1.0.0
       sourceConfidence:
         - reported
-    - kind: dev.eshu.collector.pagerduty.record
+    - kind: incident.lifecycle_event
+      payloadSchemaRef: incident.lifecycle_event
       schemaVersions:
         - 1.0.0
       sourceConfidence:
-        - observed
-    - kind: dev.eshu.collector.pagerduty.warning
+        - reported
+    - kind: change.record
+      payloadSchemaRef: change.record
+      schemaVersions:
+        - 1.0.0
+      sourceConfidence:
+        - reported
+    - kind: incident_routing.observed_pagerduty_service
+      payloadSchemaRef: incident_routing.observed_pagerduty_service
+      schemaVersions:
+        - 1.0.0
+      sourceConfidence:
+        - reported
+    - kind: incident_routing.observed_pagerduty_integration
+      payloadSchemaRef: incident_routing.observed_pagerduty_integration
+      schemaVersions:
+        - 1.0.0
+      sourceConfidence:
+        - reported
+    - kind: incident_routing.coverage_warning
+      payloadSchemaRef: incident_routing.coverage_warning
       schemaVersions:
         - 1.0.0
       sourceConfidence:
