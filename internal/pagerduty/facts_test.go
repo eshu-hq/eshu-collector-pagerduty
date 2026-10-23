@@ -242,3 +242,41 @@ func toJSON(t *testing.T, value any) string {
 	}
 	return string(encoded)
 }
+
+// TestFactSourceRefFallsBackWhenNoURISurvives proves the SDK-required
+// source_ref.uri is never blank: a fact with no usable URI of its own takes the
+// context fallback. The SDK validator rejects a blank URI, so without this a
+// default api_base_url with no source_uri would fail the whole claim.
+func TestFactSourceRefFallsBackWhenNoURISurvives(t *testing.T) {
+	t.Parallel()
+
+	const fallback = "https://api.pagerduty.com"
+	ctx := testContext()
+	ctx.SourceURI = ""
+	ctx.RefFallbackURI = fallback
+
+	incident, err := NewIncidentRecordFact(ctx, Incident{ID: "P1"})
+	if err != nil {
+		t.Fatalf("NewIncidentRecordFact() error = %v", err)
+	}
+	warning, err := NewCoverageWarningFact(ctx, ConfigWarning{
+		ResourceClass: ConfigResourceClassService, ResourceID: "PS1", Reason: ConfigWarningTruncated,
+	})
+	if err != nil {
+		t.Fatalf("NewCoverageWarningFact() error = %v", err)
+	}
+	for name, fact := range map[string]sdk.Fact{"incident": incident, "coverage warning": warning} {
+		if fact.SourceRef.URI != fallback {
+			t.Errorf("%s SourceRef.URI = %q, want the fallback %q", name, fact.SourceRef.URI, fallback)
+		}
+	}
+
+	// A URI the fact does have wins over the fallback.
+	own, err := NewIncidentRecordFact(ctx, Incident{ID: "P2", HTMLURL: "https://example.invalid/incidents/P2"})
+	if err != nil {
+		t.Fatalf("NewIncidentRecordFact(html_url) error = %v", err)
+	}
+	if own.SourceRef.URI != "https://example.invalid/incidents/P2" {
+		t.Errorf("SourceRef.URI = %q, want the fact's own URI", own.SourceRef.URI)
+	}
+}

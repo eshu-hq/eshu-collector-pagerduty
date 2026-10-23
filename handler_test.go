@@ -4,7 +4,10 @@
 package collector
 
 import (
+	"context"
 	"encoding/json"
+	"net/http"
+	"net/url"
 	"reflect"
 	"strings"
 	"testing"
@@ -287,5 +290,58 @@ func TestHandleNeverReturnsUnchanged(t *testing.T) {
 			replay.Statuses[0].FailureClass != FailureClassConfigInvalid {
 			t.Fatalf("fixture %s with previous_freshness_hint: State = %q, want terminal config_invalid", fixture, replay.State)
 		}
+	}
+}
+
+// rewriteDoer sends every request to a fixture server regardless of the host
+// the collector believes it is calling, so a default api_base_url can be
+// exercised without the network.
+type rewriteDoer struct {
+	target *url.URL
+	client *http.Client
+}
+
+func (d rewriteDoer) Do(req *http.Request) (*http.Response, error) {
+	clone := req.Clone(req.Context())
+	clone.URL.Scheme = d.target.Scheme
+	clone.URL.Host = d.target.Host
+	clone.Host = d.target.Host
+	return d.client.Do(clone)
+}
+
+// TestHandleDefaultBaseURLWithoutSourceURIKeepsEverySourceRef proves the
+// default PagerDuty API origin with no source_uri still yields a non-blank
+// source_ref.uri on every fact, including the incident that has no html_url.
+func TestHandleDefaultBaseURLWithoutSourceURIKeepsEverySourceRef(t *testing.T) {
+	t.Parallel()
+
+	server := newFixtureServer(t, "basic")
+	target, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatalf("url.Parse() error = %v", err)
+	}
+	config := testConfig("", nil)
+	delete(config, "api_base_url")
+	delete(config, "source_uri")
+	handler := testHandler(nil)
+	handler.HTTPClient = rewriteDoer{target: target, client: server.Client()}
+	result, summary := handler.Handle(context.Background(), testRequest(config))
+	if result.State != sdk.ResultComplete && result.State != sdk.ResultPartial {
+		t.Fatalf("State = %q (%s), want facts", result.State, summary.FailureClass)
+	}
+	if len(result.Facts) == 0 {
+		t.Fatal("no facts emitted")
+	}
+	fallbacks := 0
+	for _, fact := range result.Facts {
+		if strings.TrimSpace(fact.SourceRef.URI) == "" {
+			t.Fatalf("fact %s has a blank source_ref.uri", fact.Kind)
+		}
+		if fact.SourceRef.URI == "https://api.pagerduty.com" {
+			fallbacks++
+		}
+	}
+	if fallbacks == 0 {
+		t.Fatal("no fact used the default API origin fallback; the case no longer covers it")
 	}
 }
