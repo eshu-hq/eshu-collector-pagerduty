@@ -53,7 +53,7 @@ func TestParseConfigDefaultsAndMapping(t *testing.T) {
 		"incident_limit": 50, "incident_lookback": "90m", "log_entry_limit": 20, "change_event_limit": 10,
 		"allowed_service_ids": []any{" P1 ", "", "P2", "P1"}, "config_validation_enabled": true,
 		"pagination_max_pages": 3, "pagination_max_records": 400,
-		"previous_freshness_hint": " abc ", "max_result_bytes": 1000000,
+		"max_result_bytes": 1000000,
 	}, env)
 	if err != nil {
 		t.Fatalf("ParseConfig(full) error = %v", err)
@@ -77,8 +77,8 @@ func TestParseConfigDefaultsAndMapping(t *testing.T) {
 	if !target.ConfigValidationEnabled || target.ConfigResourceLimit != 100 {
 		t.Fatalf("config validation = %+v, want enabled with the default resource limit 100", target)
 	}
-	if full.PreviousFreshnessHint != "abc" || full.MaxResultBytes != 1000000 {
-		t.Fatalf("hint/max = %q/%d", full.PreviousFreshnessHint, full.MaxResultBytes)
+	if full.MaxResultBytes != 1000000 {
+		t.Fatalf("max_result_bytes = %d, want 1000000", full.MaxResultBytes)
 	}
 }
 

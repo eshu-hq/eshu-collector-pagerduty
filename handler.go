@@ -153,16 +153,6 @@ func (h Handler) Handle(ctx context.Context, request Request) (sdk.Result, Summa
 	generation := sdk.Generation{ID: claim.GenerationID, ObservedAt: startedAt, FreshnessHint: hint}
 	latencyMS := int(h.now().UTC().Sub(startedAt).Milliseconds())
 
-	if config.PreviousFreshnessHint != "" && config.PreviousFreshnessHint == hint {
-		return finish(sdk.Result{
-			ProtocolVersion: sdk.ProtocolVersionV1Alpha1,
-			State:           sdk.ResultUnchanged,
-			Claim:           claim,
-			Generation:      generation,
-			Statuses:        []sdk.Status{{Class: sdk.StatusComplete, SourceLatencyMS: latencyMS}},
-		}, summary)
-	}
-
 	result := sdk.Result{
 		ProtocolVersion: sdk.ProtocolVersionV1Alpha1,
 		State:           sdk.ResultComplete,

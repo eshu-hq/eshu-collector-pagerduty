@@ -79,9 +79,6 @@ type rawConfig struct {
 	PaginationMaxPages      int      `json:"pagination_max_pages"`
 	PaginationMaxRecords    int      `json:"pagination_max_records"`
 	AllowEmptySuccessor     bool     `json:"allow_empty_successor"`
-	// PreviousFreshnessHint, when set, lets a host that persists the last
-	// emitted freshness hint ask for an unchanged result.
-	PreviousFreshnessHint string `json:"previous_freshness_hint"`
 	// MaxResultBytes bounds the encoded result; zero selects the default.
 	MaxResultBytes int `json:"max_result_bytes"`
 }
@@ -92,8 +89,6 @@ type Config struct {
 	Target pagerduty.TargetConfig
 	// Token is the resolved API token. It is never logged or emitted.
 	Token string
-	// PreviousFreshnessHint is the optional last-emitted freshness hint.
-	PreviousFreshnessHint string
 	// MaxResultBytes bounds the encoded result.
 	MaxResultBytes int
 }
@@ -198,10 +193,9 @@ func (c rawConfig) validate(getenv func(string) string) (Config, error) {
 		maxResult = DefaultMaxResultBytes
 	}
 	return Config{
-		Target:                target,
-		Token:                 token,
-		PreviousFreshnessHint: strings.TrimSpace(c.PreviousFreshnessHint),
-		MaxResultBytes:        maxResult,
+		Target:         target,
+		Token:          token,
+		MaxResultBytes: maxResult,
 	}, nil
 }
 

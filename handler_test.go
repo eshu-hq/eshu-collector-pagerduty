@@ -269,22 +269,23 @@ func TestHandleDuplicateDeliveryIsByteIdentical(t *testing.T) {
 	}
 }
 
-// TestHandleUnchangedWhenPreviousHintMatches proves the unchanged shape: no
-// facts, a complete status, and the hint echoed on the generation.
-func TestHandleUnchangedWhenPreviousHintMatches(t *testing.T) {
+// TestHandleNeverReturnsUnchanged proves the collector has no unchanged path.
+// The host completes an unchanged claim without committing a generation, so a
+// static activation hint could pin the graph to stale state; the ingestion
+// store already dedups on the freshness hint. A previous_freshness_hint key is
+// no longer part of the config and fails closed.
+func TestHandleNeverReturnsUnchanged(t *testing.T) {
 	t.Parallel()
 
-	first, _, _ := runFixture(t, "basic", nil)
-	hint := first.Generation.FreshnessHint
-	again, summary, _ := runFixture(t, "basic", map[string]any{"previous_freshness_hint": hint})
-	if again.State != sdk.ResultUnchanged || len(again.Facts) != 0 {
-		t.Fatalf("State = %q facts = %d, want unchanged with no facts", again.State, len(again.Facts))
-	}
-	if again.Generation.FreshnessHint != hint || summary.FactCount == 0 {
-		t.Fatalf("hint = %q summary = %+v, want the echoed hint", again.Generation.FreshnessHint, summary)
-	}
-	other, _, _ := runFixture(t, "basic", map[string]any{"previous_freshness_hint": "stale"})
-	if other.State != sdk.ResultComplete {
-		t.Fatalf("State = %q with a stale previous hint, want complete", other.State)
+	for _, fixture := range []string{"basic", "empty", "paged", "allowed-services"} {
+		first, _, _ := runFixture(t, fixture, nil)
+		if first.State == sdk.ResultUnchanged {
+			t.Fatalf("fixture %s returned unchanged", fixture)
+		}
+		replay, _, _ := runFixture(t, fixture, map[string]any{"previous_freshness_hint": first.Generation.FreshnessHint})
+		if replay.State != sdk.ResultTerminal || len(replay.Facts) != 0 ||
+			replay.Statuses[0].FailureClass != FailureClassConfigInvalid {
+			t.Fatalf("fixture %s with previous_freshness_hint: State = %q, want terminal config_invalid", fixture, replay.State)
+		}
 	}
 }

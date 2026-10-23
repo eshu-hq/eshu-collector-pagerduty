@@ -37,7 +37,6 @@ host refuses to activate the component without a producer grant for each one.
 | --- | --- |
 | `complete` | Every list ended on its own. |
 | `partial` | At least one coverage warning was emitted (a page or record bound was hit while PagerDuty had more, a service was hidden by permissions or missing, or a record was unusable). The facts are still committed. |
-| `unchanged` | `previous_freshness_hint` equals the freshness hint of this collection. No facts. |
 | `retryable` | `rate_limited` (HTTP 408, 409, 425, 429), `retryable` (5xx, transport, malformed body), `claim_deadline_exceeded`, or `canceled`. The status carries `retry_after_seconds`. |
 | `terminal` | `auth_denied` (401, 403), `not_found` (404), `terminal` (other 4xx, redirects), or a config problem: `config_invalid`, `credential_missing`, `unsupported_option`, `scope_not_configured`, `invalid_claim`, `result_too_large`, `fact_invalid`. |
 
@@ -60,7 +59,6 @@ values. The `config` keys mirror the in-tree collector's target settings.
 | `pagination_max_pages`, `pagination_max_records` | Bounds per list (defaults 10 and 1000; ceilings 100 and 5000). |
 | `allowed_service_ids` | Read only these services. |
 | `config_validation_enabled` | Also read live service and integration configuration. |
-| `previous_freshness_hint` | Optional. Return `unchanged` when the collection matches this hint. |
 | `max_result_bytes` | Fail terminal above this many encoded bytes (default 3500000, under the host's 4 MiB output limit). |
 | `allow_empty_successor` | Parsed but **unsupported**: see Known limits. |
 
