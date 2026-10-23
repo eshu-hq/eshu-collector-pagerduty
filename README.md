@@ -123,8 +123,10 @@ docker build -t eshu-collector-pagerduty:local .
   attestation that an empty or sharply smaller successor is legitimate cannot
   reach the host. Setting it returns a terminal `unsupported_option`. Without
   it, the ingestion store refuses to replace a content-bearing generation with
-  an empty or sharply shrunken one. This lifts when a collector SDK release
-  carries the field.
+  an empty or sharply shrunken one. Removal condition: a collector SDK
+  release that contains `Generation.TrustedDeletion` (added in eshu-hq/eshu commit
+  `49205b1214`, after the v0.2.0 tag). Then bump the SDK pin, map the option onto
+  the Result generation, and replace the fail-closed test.
 - **No OpenTelemetry.** The process runner has no metrics endpoint. Operators
   read the host's recorded statuses (failure class, fact count, warning count,
   source latency) and the one health line this program writes to standard error.
