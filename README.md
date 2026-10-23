@@ -54,7 +54,7 @@ values. The `config` keys mirror the in-tree collector's target settings.
 | --- | --- |
 | `scope_id`, `account_id` | Required. `scope_id` must equal `host.scope.id`; a claim for another scope fails terminal. |
 | `token_env` | Required. The **name** of the environment variable that holds the API token. The token itself is never in the config. |
-| `api_base_url`, `source_uri` | Optional. Default API origin is `https://api.pagerduty.com`. |
+| `api_base_url`, `source_uri` | Optional. Default API origin is `https://api.pagerduty.com`. Plain `http` is accepted only for a loopback host, because the token travels in a header. |
 | `incident_lookback` | How far back to read incidents. Default `6h`. |
 | `incident_limit`, `log_entry_limit`, `change_event_limit`, `config_resource_limit` | Page sizes, 0 to 100. |
 | `pagination_max_pages`, `pagination_max_records` | Bounds per list (defaults 10 and 1000; ceilings 100 and 5000). |

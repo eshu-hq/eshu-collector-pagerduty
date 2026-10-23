@@ -69,6 +69,8 @@ hostile or unusual input; each has its own unit test:
   failing the claim.
 - A provider identifier that is not a PagerDuty-shaped ID is never placed in a
   request path.
+- Plain `http` API URLs are refused unless the host is loopback, so the token
+  never crosses a network in cleartext.
 - Query keys that the SDK considers sensitive are removed from emitted URLs
   (a superset of the in-tree list).
 - The source reference URI falls back to the API base URL when no usable URI

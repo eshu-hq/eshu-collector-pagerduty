@@ -87,6 +87,16 @@ func TestNewClientValidatesConfig(t *testing.T) {
 	if _, err := NewClient(ClientConfig{BaseURL: "ftp://api.example.invalid", Token: "x"}); err == nil {
 		t.Fatal("non-http base URL accepted")
 	}
+	for _, raw := range []string{"http://api.example.invalid", "http://10.0.0.5:8080", "http://[fe80::1]"} {
+		if _, err := NewClient(ClientConfig{BaseURL: raw, Token: "x"}); err == nil {
+			t.Errorf("cleartext non-loopback base URL %q accepted", raw)
+		}
+	}
+	for _, raw := range []string{"http://127.0.0.1:9", "http://localhost:9", "http://[::1]:9", "https://api.example.invalid"} {
+		if _, err := NewClient(ClientConfig{BaseURL: raw, Token: "x"}); err != nil {
+			t.Errorf("base URL %q rejected: %v", raw, err)
+		}
+	}
 	client, err := NewClient(ClientConfig{Token: "x"})
 	if err != nil || client.baseURL.String() != DefaultAPIBaseURL {
 		t.Fatalf("default base URL = %v, %v, want %s", client, err, DefaultAPIBaseURL)

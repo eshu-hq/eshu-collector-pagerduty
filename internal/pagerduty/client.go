@@ -6,6 +6,7 @@ package pagerduty
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -52,6 +53,11 @@ func NewClient(config ClientConfig) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
+	// The token travels in a request header, so cleartext HTTP is allowed
+	// only to a loopback host (a local test double or a sidecar proxy).
+	if baseURL.Scheme == "http" && !isLoopbackHost(baseURL.Hostname()) {
+		return nil, fmt.Errorf("pagerduty api base_url must use https unless the host is loopback")
+	}
 	token := strings.TrimSpace(config.Token)
 	if token == "" {
 		return nil, fmt.Errorf("pagerduty token is required")
@@ -61,6 +67,14 @@ func NewClient(config ClientConfig) (*Client, error) {
 		client = httpx.DefaultHTTPClient(0)
 	}
 	return &Client{baseURL: baseURL, token: token, client: client}, nil
+}
+
+func isLoopbackHost(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 // CollectIncidentEvidence fetches one bounded PagerDuty incident evidence

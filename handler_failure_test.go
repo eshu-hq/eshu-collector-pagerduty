@@ -207,6 +207,7 @@ func TestHandleRejectsUnservableClaims(t *testing.T) {
 		{"wrong typed config value", func(r *Request) { r.Config["incident_limit"] = "ten" }, nil, FailureClassConfigInvalid},
 		{"out of range limit", func(r *Request) { r.Config["incident_limit"] = 101 }, nil, FailureClassConfigInvalid},
 		{"base url with credentials", func(r *Request) { r.Config["api_base_url"] = "https://user:pw@api.example.invalid" }, nil, FailureClassConfigInvalid},
+		{"cleartext base url to a remote host", func(r *Request) { r.Config["api_base_url"] = "http://api.example.invalid" }, nil, FailureClassConfigInvalid},
 		{"base url with a non-http scheme", func(r *Request) { r.Config["api_base_url"] = "file:///etc/passwd" }, nil, FailureClassConfigInvalid},
 		{"empty-successor attestation cannot reach the host yet", func(r *Request) { r.Config["allow_empty_successor"] = true }, nil, FailureClassUnsupportedOption},
 	}
