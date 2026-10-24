@@ -79,6 +79,15 @@ eshu component enable dev.eshu.collector.pagerduty --component-home "$HOME_DIR" 
 A grant's scope is the collector kind (`pagerduty`), not a scope ID.
 `grant.example.json` lists the six grants.
 
+### Trust mode
+
+The release signs the image digest keyless with cosign, but it does a plain
+`cosign sign`, so the signature carries no `eshu.component.*` annotations. That
+suits **allowlist** trust, which the install command above uses. **Strict**
+trust has Eshu run `cosign verify` with those annotations, and this workflow
+does not produce them, so strict trust is not supported yet. Adding it is a
+follow-up.
+
 ## Image and seeding
 
 The image is `ghcr.io/eshu-hq/eshu-collector-pagerduty`: one static binary at
@@ -114,6 +123,12 @@ Only a pushed tag publishes an image. `.github/workflows/release.yml` runs on
 It uses only the job's `GITHUB_TOKEN`, pins every action by commit SHA, and has
 no deploy step.
 
+Before the first tag, check the repository settings, because a workflow cannot
+enforce them. Any pushed `v*` tag publishes a public image, so restrict `v*`
+tag creation to maintainers (a repository ruleset for tags). The workflow checks
+the tag against `manifest.yaml` but does not check that the tagged commit is on
+`main`, so tag only a commit that was merged there.
+
 1. Merge the change to `main`. The tag must match `metadata.version` in
    `manifest.yaml` (`v0.1.0` for version `0.1.0`; a `-rc1` style suffix is
    allowed). Bump the manifest version in the same PR.
@@ -131,7 +146,17 @@ no deploy step.
 
 The package must be **public**: the activation pulls it without a token. A new
 GHCR package starts private, so after the first release set its visibility to
-public in the package settings and re-run the job; the last step checks it.
+public in the package settings and re-run the job; the last step checks it. The
+step fails with "not publicly readable" only when the registry refuses the
+anonymous pull. Any other failure reports its own message.
+
+The image digest is not reproducible across attempts. The build passes the
+tagged commit's time as `SOURCE_DATE_EPOCH`, which pins the image's created
+time, but layer bytes can still differ. The re-run therefore pushes `:<tag>`
+again with a new digest and signs and attests that one. Use the digest from the
+job summary of the **last, successful attempt**: it is the one the tag points to
+and the one the anonymous-pull check passed for. The first attempt's digest is
+also signed and attested, but the tag no longer points to it.
 
 Verify a release before using it:
 
@@ -141,6 +166,8 @@ cosign verify ghcr.io/eshu-hq/eshu-collector-pagerduty@sha256:<digest> \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 gh attestation verify oci://ghcr.io/eshu-hq/eshu-collector-pagerduty@sha256:<digest> \
   -R eshu-hq/eshu-collector-pagerduty
+# The SPDX predicate version is the one in the SBOM's spdxVersion
+# (SPDX-2.3 gives v2.3). The workflow reads it from the SBOM file.
 gh attestation verify oci://ghcr.io/eshu-hq/eshu-collector-pagerduty@sha256:<digest> \
   -R eshu-hq/eshu-collector-pagerduty --predicate-type https://spdx.dev/Document/v2.3
 ```
