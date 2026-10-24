@@ -61,8 +61,11 @@ func TestReleaseWorkflowContractCatchesReorderedSteps(t *testing.T) {
 	}
 	const buildStep = "Build and push the linux/amd64 image"
 	for name, move := range map[string]struct{ step, after string }{
-		"guard moved after build": {tagGuardStep, buildStep},
-		"guard moved to the end":  {tagGuardStep, anonymousStep},
+		"guard moved after build":         {tagGuardStep, buildStep},
+		"guard moved to the end":          {tagGuardStep, anonymousStep},
+		"checkout moved after the guard":  {checkoutStep, tagGuardStep},
+		"tag shape moved after build":     {tagShapeStep, buildStep},
+		"tag shape moved after the guard": {tagShapeStep, tagGuardStep},
 	} {
 		mutated := moveWorkflowStepAfter(t, good, move.step, move.after)
 		if mutated == good {
@@ -157,6 +160,26 @@ func TestReleaseWorkflowContractCatchesSeededViolations(t *testing.T) {
 		"N4 any failure means private":    {`if printf '%s' "${output}" | grep -Eqi 'unauthorized|denied|forbidden'; then`, "if true; then"},
 		"N4 access text dropped":          {"unauthorized|denied|forbidden", "x"},
 		"N4 buildx probe keeps creds":     {`DOCKER_CONFIG="${anonymous}" docker buildx version`, "docker buildx version"},
+		// Checkout credentials, advisory steps, and tag shape.
+		"persist-credentials true":    {"persist-credentials: false", "persist-credentials: true"},
+		"persist-credentials removed": {"        with:\n          persist-credentials: false\n", ""},
+		"tag shape regex open":        {`'^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'`, `'^v.*$'`},
+		"continue-on-error on signature verify": {
+			"- name: Verify the signature\n", "- name: Verify the signature\n        continue-on-error: true\n",
+		},
+		"continue-on-error on attestation verify": {
+			"- name: Verify the attestations\n", "- name: Verify the attestations\n        continue-on-error: true\n",
+		},
+		"continue-on-error on the tag guard": {
+			"- name: Require the tag to match the manifest version\n", "- name: Require the tag to match the manifest version\n        continue-on-error: true\n",
+		},
+		"continue-on-error on the anonymous pull": {
+			"- name: Require the package to be public\n", "- name: Require the package to be public\n        continue-on-error: true\n",
+		},
+		"continue-on-error false is still rejected": {
+			"- name: Verify the signature\n", "- name: Verify the signature\n        continue-on-error: false\n",
+		},
+		"continue-on-error on the job": {"timeout-minutes: 30\n", "timeout-minutes: 30\n    continue-on-error: true\n"},
 		// Guards.
 		"tag guard weakened":        {`test "v${version}" = "${TAG_NAME%%-*}"`, "true"},
 		"tag env not ref":           {"TAG_NAME: ${{ github.ref_name }}", "TAG_NAME: main"},
@@ -167,7 +190,6 @@ func TestReleaseWorkflowContractCatchesSeededViolations(t *testing.T) {
 		"summary wrong digest":      {"DIGEST: ${{ steps.build.outputs.digest }}", "DIGEST: sha256:0000"},
 		"build push disabled":       {"push: true", "push: false"},
 		"build id renamed":          {"id: build\n", "id: image\n"},
-		"checkout removed":          {"      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0\n", ""},
 		"cosign installer absent":   {"      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2\n", ""},
 	}
 	for name, test := range replacements {
@@ -184,6 +206,8 @@ func TestReleaseWorkflowContractCatchesSeededViolations(t *testing.T) {
 		"W1 cosign verify step deleted":  "Verify the signature",
 		"W3 anonymous-pull step deleted": "Require the package to be public",
 		"W4 tag/manifest check deleted":  "Require the tag to match the manifest version",
+		"tag shape step deleted":         tagShapeStep,
+		"checkout step deleted":          checkoutStep,
 		"W6 attestation verify deleted":  "Verify the attestations",
 		"sign step deleted":              "Sign the image digest (keyless)",
 		"provenance step deleted":        "Attest SLSA build provenance",

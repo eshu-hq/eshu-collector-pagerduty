@@ -21,6 +21,9 @@ const (
 	releaseEpochExpr  = "${{ steps.epoch.outputs.epoch }}"
 	releaseOIDCIssuer = "https://token.actions.githubusercontent.com"
 	releaseIdentity   = "https://github.com/${{ github.workflow_ref }}"
+	// tagShapeCheck is the exact tag filter the workflow must run before it
+	// checks out, builds, or publishes anything.
+	tagShapeCheck = `grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'`
 )
 
 // releasePermissions is the exact permission set the release job must hold:
@@ -129,6 +132,12 @@ func releaseWorkflowViolations(raw []byte) []string {
 		return []string{fmt.Sprintf("workflow does not parse: %v", err)}
 	}
 	c := &contract{}
+	var document yaml.Node
+	if err := yaml.Unmarshal(raw, &document); err != nil {
+		return []string{fmt.Sprintf("workflow does not parse: %v", err)}
+	}
+	c.need(!yamlHasKey(&document, "continue-on-error"),
+		"workflow sets continue-on-error; a failed verify or guard step must fail the release")
 	var steps []workflowStep
 	for _, job := range workflow.Jobs {
 		steps = append(steps, job.Steps...)
@@ -170,6 +179,10 @@ func checkStepHygiene(c *contract, workflow releaseWorkflow, steps []workflowSte
 	for _, step := range steps {
 		if step.Uses != "" && !pinnedAction.MatchString(step.Uses) {
 			c.add("step uses %q, want a commit-SHA pin", step.Uses)
+		}
+		if strings.HasPrefix(step.Uses, "actions/checkout@") {
+			c.need(step.with("persist-credentials") == "false",
+				"checkout persist-credentials is %q, want false (no token left in the work tree)", step.with("persist-credentials"))
 		}
 		if expressionInRun.MatchString(step.Run) {
 			c.add("step %q puts an expression in a shell script; pass it through env", step.Name)
@@ -309,18 +322,47 @@ func checkGuards(c *contract, workflow releaseWorkflow, steps []workflowStep) {
 	c.need(ok && summary.Env["DIGEST"] == releaseDigestExpr, "the summary step must record the build digest")
 }
 
-// checkGuardOrder requires the tag guard to run after the checkout (it reads
-// manifest.yaml) and before the step that builds and pushes the image, so a
-// tag that does not match the manifest never publishes anything.
+// checkGuardOrder requires the tag-shape filter and the manifest guard to run
+// before the step that builds and pushes the image, and the checkout (the
+// guard reads manifest.yaml) to run before the manifest guard, so a tag that
+// is malformed or does not match the manifest never publishes anything.
 func checkGuardOrder(c *contract, steps []workflowStep) {
+	shapeIdx := stepIndex(steps, func(s workflowStep) bool { return strings.Contains(s.Run, tagShapeCheck) })
 	guardIdx := stepIndex(steps, func(s workflowStep) bool { return strings.Contains(s.Run, "manifest.yaml") })
 	buildIdx := stepIndex(steps, func(s workflowStep) bool { return s.ID == "build" })
 	checkoutIdx := stepIndex(steps, func(s workflowStep) bool { return strings.HasPrefix(s.Uses, "actions/checkout@") })
-	if guardIdx < 0 || buildIdx < 0 {
-		return // the missing step is already reported by the rules above.
+	c.need(shapeIdx >= 0, "no step filters the tag with %s", tagShapeCheck)
+	if shapeIdx >= 0 && guardIdx >= 0 {
+		c.need(shapeIdx < guardIdx, "the tag shape check (step %d) runs after the manifest guard (step %d)", shapeIdx, guardIdx)
 	}
-	c.need(guardIdx < buildIdx, "the tag guard (step %d) runs after the build and push step (step %d)", guardIdx, buildIdx)
-	c.need(checkoutIdx >= 0 && checkoutIdx < guardIdx, "the checkout (step %d) must run before the tag guard (step %d)", checkoutIdx, guardIdx)
+	// The shape check runs before the guard and the guard before the build,
+	// so the shape check also runs before the build.
+	if guardIdx >= 0 && buildIdx >= 0 {
+		c.need(guardIdx < buildIdx, "the tag guard (step %d) runs after the build and push step (step %d)", guardIdx, buildIdx)
+	}
+	if guardIdx >= 0 {
+		c.need(checkoutIdx >= 0 && checkoutIdx < guardIdx, "the checkout (step %d) must run before the tag guard (step %d)", checkoutIdx, guardIdx)
+	}
+}
+
+// yamlHasKey reports whether any mapping in the document has key as a key.
+func yamlHasKey(node *yaml.Node, key string) bool {
+	if node == nil {
+		return false
+	}
+	if node.Kind == yaml.MappingNode {
+		for i := 0; i+1 < len(node.Content); i += 2 {
+			if node.Content[i].Value == key {
+				return true
+			}
+		}
+	}
+	for _, child := range node.Content {
+		if yamlHasKey(child, key) {
+			return true
+		}
+	}
+	return false
 }
 
 // TestReleaseWorkflowContract holds the real release workflow to the contract.

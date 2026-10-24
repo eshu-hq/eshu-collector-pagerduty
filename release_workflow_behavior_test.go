@@ -16,6 +16,8 @@ import (
 )
 
 const (
+	tagShapeStep  = "Require a semantic version tag"
+	checkoutStep  = "Check out the tagged commit"
 	tagGuardStep  = "Require the tag to match the manifest version"
 	anonymousStep = "Require the package to be public"
 	attestStep    = "Verify the attestations"
@@ -106,6 +108,30 @@ func tagGuardProblems(t *testing.T, run string) []string {
 		t.Fatalf("manifest.yaml has no metadata.version: %v", err)
 	}
 	check(string(real), "v"+parsed.Metadata.Version, true)
+	return problems
+}
+
+// tagShapeProblems runs the tag-shape filter against well-formed and hostile
+// tags. The hostile ones are exactly the tags the manifest guard lets through
+// (it compares only the text before the first dash) and that docker later
+// rejects at build time.
+func tagShapeProblems(t *testing.T, run string) []string {
+	t.Helper()
+	var problems []string
+	for tag, pass := range map[string]bool{
+		"v0.1.0": true, "v10.20.30": true, "v0.1.0-rc1": true, "v0.1.0-rc.1": true, "v0.1.0-a-b": true,
+		"v0.1.0-": false, "v0.1.0-rc/a/b": false, "v0.1.0-$(id)": false, "v0.1.0-rc 1": false, "v0.1.0-rc_1": false,
+		"v0.1": false, "v0.1.0.1": false, "0.1.0": false, "v0.1.0+build": false, "vx.y.z": false, "xv0.1.0": false, "release-v0.1.0": false, "main": false, "v": false, "": false,
+	} {
+		dir := t.TempDir()
+		out, code := runReleaseScript(t, run, dir, map[string]string{"TAG_NAME": tag}, nil)
+		if (code == 0) != pass {
+			problems = append(problems, fmt.Sprintf("tag %q: exit %d, want pass=%v (%s)", tag, code, pass, strings.TrimSpace(out)))
+		}
+		if !pass && !strings.Contains(out, "is not vMAJOR.MINOR.PATCH") {
+			problems = append(problems, fmt.Sprintf("tag %q: refused without saying why (%s)", tag, strings.TrimSpace(out)))
+		}
+	}
 	return problems
 }
 
@@ -216,6 +242,7 @@ func spdxPredicateProblems(t *testing.T, run string) []string {
 }
 
 var releaseScriptChecks = map[string]func(*testing.T, string) []string{
+	tagShapeStep:  tagShapeProblems,
 	tagGuardStep:  tagGuardProblems,
 	anonymousStep: anonymousCheckProblems,
 	attestStep:    spdxPredicateProblems,
@@ -262,6 +289,15 @@ func TestReleaseWorkflowScriptChecksCatchSeededViolations(t *testing.T) {
 		step   string
 		mutate func(*testing.T, string) string
 	}{
+		"tag shape accepts any v tag": {tagShapeStep, func(t *testing.T, s string) string {
+			return replaceLast(t, s, `'^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'`, `'^v.*$'`)
+		}},
+		"tag shape allows an empty prerelease": {tagShapeStep, func(t *testing.T, s string) string {
+			return replaceLast(t, s, `(-[0-9A-Za-z.-]+)?$'`, `(-[0-9A-Za-z.-]*)?$'`)
+		}},
+		"tag shape unanchored at the start": {tagShapeStep, func(t *testing.T, s string) string { return replaceLast(t, s, "'^v[0-9]", "'v[0-9]") }},
+		"tag shape never fails":             {tagShapeStep, func(t *testing.T, s string) string { return replaceLast(t, s, "exit 1", "exit 0") }},
+		"tag shape skips the filter":        {tagShapeStep, func(t *testing.T, s string) string { return replaceLast(t, s, "if ! printf", "if false && printf") }},
 		"tag guard compares nothing": {tagGuardStep, func(t *testing.T, s string) string {
 			return replaceLast(t, s, `test "v${version}" = "${TAG_NAME%%-*}"`, "true")
 		}},
