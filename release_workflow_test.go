@@ -96,6 +96,17 @@ func findStep(steps []workflowStep, match func(workflowStep) bool) (workflowStep
 	return workflowStep{}, false
 }
 
+// stepIndex returns the position of the first step for which match is true,
+// or -1.
+func stepIndex(steps []workflowStep, match func(workflowStep) bool) int {
+	for i, step := range steps {
+		if match(step) {
+			return i
+		}
+	}
+	return -1
+}
+
 func stepRunning(steps []workflowStep, fragment string) (workflowStep, bool) {
 	return findStep(steps, func(s workflowStep) bool { return strings.Contains(s.Run, fragment) })
 }
@@ -264,6 +275,7 @@ func checkGuards(c *contract, workflow releaseWorkflow, steps []workflowStep) {
 			c.need(strings.Contains(tag.Run, want), "tag guard lacks %q", want)
 		}
 	}
+	checkGuardOrder(c, steps)
 	verifyAttest, ok := stepRunning(steps, attestVerifyFlag)
 	if !ok {
 		c.add("workflow never runs %q", attestVerifyFlag)
@@ -295,6 +307,20 @@ func checkGuards(c *contract, workflow releaseWorkflow, steps []workflowStep) {
 	c.need(anonymous.Env["IMAGE_REF"] == releaseDigestRef, "anonymous-pull IMAGE_REF is %q, want the digest reference", anonymous.Env["IMAGE_REF"])
 	summary, ok := stepRunning(steps, "GITHUB_STEP_SUMMARY")
 	c.need(ok && summary.Env["DIGEST"] == releaseDigestExpr, "the summary step must record the build digest")
+}
+
+// checkGuardOrder requires the tag guard to run after the checkout (it reads
+// manifest.yaml) and before the step that builds and pushes the image, so a
+// tag that does not match the manifest never publishes anything.
+func checkGuardOrder(c *contract, steps []workflowStep) {
+	guardIdx := stepIndex(steps, func(s workflowStep) bool { return strings.Contains(s.Run, "manifest.yaml") })
+	buildIdx := stepIndex(steps, func(s workflowStep) bool { return s.ID == "build" })
+	checkoutIdx := stepIndex(steps, func(s workflowStep) bool { return strings.HasPrefix(s.Uses, "actions/checkout@") })
+	if guardIdx < 0 || buildIdx < 0 {
+		return // the missing step is already reported by the rules above.
+	}
+	c.need(guardIdx < buildIdx, "the tag guard (step %d) runs after the build and push step (step %d)", guardIdx, buildIdx)
+	c.need(checkoutIdx >= 0 && checkoutIdx < guardIdx, "the checkout (step %d) must run before the tag guard (step %d)", checkoutIdx, guardIdx)
 }
 
 // TestReleaseWorkflowContract holds the real release workflow to the contract.

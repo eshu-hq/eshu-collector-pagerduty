@@ -13,17 +13,66 @@ import (
 // so a seeded violation can model "this step was deleted".
 func dropWorkflowStep(t *testing.T, workflow, name string) string {
 	t.Helper()
+	start, end := workflowStepBounds(t, workflow, name)
+	return workflow[:start] + workflow[end:]
+}
+
+// workflowStepBounds returns the byte range of the step named name, from the
+// start of its "- name:" line to the start of the next step (or the end).
+func workflowStepBounds(t *testing.T, workflow, name string) (start, end int) {
+	t.Helper()
 	marker := "- name: " + name + "\n"
 	at := strings.Index(workflow, marker)
 	if at < 0 {
 		t.Fatalf("step %q is missing from release.yml; update the test", name)
 	}
-	start := strings.LastIndex(workflow[:at], "\n") + 1
-	end := len(workflow)
+	start = strings.LastIndex(workflow[:at], "\n") + 1
+	end = len(workflow)
 	if next := strings.Index(workflow[at:], "\n      - "); next >= 0 {
 		end = at + next + 1
 	}
-	return workflow[:start] + workflow[end:]
+	return start, end
+}
+
+// moveWorkflowStepAfter moves the step named name to just after the step named
+// anchor, so a seeded violation can model "this step now runs too late".
+func moveWorkflowStepAfter(t *testing.T, workflow, name, anchor string) string {
+	t.Helper()
+	start, end := workflowStepBounds(t, workflow, name)
+	block := workflow[start:end]
+	rest := workflow[:start] + workflow[end:]
+	_, anchorEnd := workflowStepBounds(t, rest, anchor)
+	return rest[:anchorEnd] + block + rest[anchorEnd:]
+}
+
+// TestReleaseWorkflowContractCatchesReorderedSteps moves a step that must run
+// early to just after the step that publishes, and requires the checker to
+// notice. Dropping a step is covered elsewhere; order is a separate property.
+func TestReleaseWorkflowContractCatchesReorderedSteps(t *testing.T) {
+	t.Parallel()
+
+	raw, err := os.ReadFile(".github/workflows/release.yml")
+	if err != nil {
+		t.Fatalf("os.ReadFile(release.yml) error = %v", err)
+	}
+	good := string(raw)
+	if violations := releaseWorkflowViolations(raw); len(violations) > 0 {
+		t.Fatalf("the unmutated release.yml must satisfy the contract first:\n%s", strings.Join(violations, "\n"))
+	}
+	const buildStep = "Build and push the linux/amd64 image"
+	for name, move := range map[string]struct{ step, after string }{
+		"guard moved after build": {tagGuardStep, buildStep},
+		"guard moved to the end":  {tagGuardStep, anonymousStep},
+	} {
+		mutated := moveWorkflowStepAfter(t, good, move.step, move.after)
+		if mutated == good {
+			t.Errorf("%s: the move changed nothing; update the test", name)
+			continue
+		}
+		if len(releaseWorkflowViolations([]byte(mutated))) == 0 {
+			t.Errorf("%s: the checker accepted a reordered workflow", name)
+		}
+	}
 }
 
 // TestReleaseWorkflowContractCatchesSeededViolations plants one violation at a
