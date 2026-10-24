@@ -80,65 +80,108 @@ func TestImportBoundaryRejectsCoreAndCrossCollectorImports(t *testing.T) {
 	}
 }
 
-// TestGoModRequiresNoEshuCoreModule keeps a forbidden dependency from hiding
-// behind an unused import: go.mod must not require anything under the Eshu
-// core module path. The published SDK lives under github.com/eshu-hq/eshu/sdk,
-// which is a different prefix.
-func TestGoModRequiresNoEshuCoreModule(t *testing.T) {
+// TestGoModRequiresOnlyThePublishedSDK keeps a forbidden dependency from
+// hiding behind an unused import: go.mod must not require, replace, or point
+// at any github.com/eshu-hq/ module other than the published SDK modules under
+// github.com/eshu-hq/eshu/sdk/go and this repository's own path. That rejects
+// the Eshu core module, another collector's module, and a local path replace.
+func TestGoModRequiresOnlyThePublishedSDK(t *testing.T) {
 	t.Parallel()
 
 	raw, err := os.ReadFile("go.mod")
 	if err != nil {
 		t.Fatalf("os.ReadFile(go.mod) error = %v", err)
 	}
-	if bad := forbiddenCoreRequires(string(raw)); len(bad) > 0 {
-		t.Fatalf("go.mod requires the Eshu core module:\n%s", strings.Join(bad, "\n"))
+	if bad := forbiddenEshuModules(string(raw), modulePath(t)); len(bad) > 0 {
+		t.Fatalf("go.mod depends on more than the published SDK:\n%s", strings.Join(bad, "\n"))
 	}
 }
 
-// TestForbiddenCoreRequiresDetectsEveryRequireForm proves the go.mod check on
-// synthetic go.mod text: it must catch a core require in a block, a
-// single-line require, and an indirect one, and it must not flag the SDK.
-func TestForbiddenCoreRequiresDetectsEveryRequireForm(t *testing.T) {
+// TestForbiddenEshuModulesDetectsEveryForm proves the go.mod check on
+// synthetic go.mod text: it must catch a core module, another collector, a
+// near-miss path, a quoted path, a replace target, and a local path replace in
+// every require form, and it must not flag the SDK or this module's own path.
+func TestForbiddenEshuModulesDetectsEveryForm(t *testing.T) {
 	t.Parallel()
 
-	const core = "github.com/eshu-hq/eshu/go"
+	const (
+		self   = "github.com/eshu-hq/eshu-collector-pagerduty"
+		core   = "github.com/eshu-hq/eshu/go"
+		jira   = "github.com/eshu-hq/eshu-collector-jira"
+		header = "module " + self + "\n\n"
+	)
 	for name, test := range map[string]struct {
 		goMod string
 		want  []string
 	}{
 		"clean": {
-			goMod: "module x\n\nrequire (\n\tgithub.com/eshu-hq/eshu/sdk/go/collector v0.2.0\n\tgopkg.in/yaml.v3 v3.0.1\n)\n",
+			goMod: header + "require (\n\tgithub.com/eshu-hq/eshu/sdk/go/collector v0.2.0\n\tgithub.com/eshu-hq/eshu/sdk/go/factschema v0.2.0\n\tgopkg.in/yaml.v3 v3.0.1\n)\n",
+		},
+		"comment that names another collector": {
+			goMod: header + "// Do not require " + jira + ".\nrequire gopkg.in/yaml.v3 v3.0.1 // not " + jira + "\n",
 		},
 		"core in a block": {
-			goMod: "module x\n\nrequire (\n\t" + core + " v0.0.1\n)\n",
+			goMod: header + "require (\n\t" + core + " v0.0.1\n)\n",
 			want:  []string{core},
 		},
 		"core subpath single line": {
-			goMod: "module x\n\nrequire " + core + "/internal v0.0.1\n",
+			goMod: header + "require " + core + "/internal v0.0.1\n",
 			want:  []string{core + "/internal"},
 		},
 		"core indirect with comment": {
-			goMod: "module x\nrequire (\n\t" + core + " v0.0.1 // indirect\n)\n",
+			goMod: header + "require (\n\t" + core + " v0.0.1 // indirect\n)\n",
 			want:  []string{core},
 		},
-		"similar prefix is not core": {
-			goMod: "module x\nrequire github.com/eshu-hq/eshu/gopher v1.0.0\n",
+		"another collector in a block": {
+			goMod: header + "require (\n\t" + jira + " v0.1.0\n)\n",
+			want:  []string{jira},
+		},
+		"another collector single line": {
+			goMod: header + "require " + jira + " v0.1.0\n",
+			want:  []string{jira},
+		},
+		"near miss of the SDK prefix": {
+			goMod: header + "require github.com/eshu-hq/eshu/sdk/gopher v1.0.0\n",
+			want:  []string{"github.com/eshu-hq/eshu/sdk/gopher"},
+		},
+		"near miss of the core prefix": {
+			goMod: header + "require github.com/eshu-hq/eshu/gopher v1.0.0\n",
+			want:  []string{"github.com/eshu-hq/eshu/gopher"},
+		},
+		"name that extends this module's": {
+			goMod: header + "require " + self + "-fork v1.0.0\n",
+			want:  []string{self + "-fork"},
+		},
+		"quoted require": {
+			goMod: header + "require \"" + jira + "\" v0.1.0\n",
+			want:  []string{jira},
 		},
 		"replace target": {
-			goMod: "module x\nreplace example.com/a => " + core + " v0.0.1\n",
+			goMod: header + "replace example.com/a => " + core + " v0.0.1\n",
 			want:  []string{core},
+		},
+		"SDK replaced by another collector": {
+			goMod: header + "replace github.com/eshu-hq/eshu/sdk/go/collector => " + jira + " v0.1.0\n",
+			want:  []string{jira},
+		},
+		"local path replace": {
+			goMod: header + "replace example.com/a => ../eshu/go\n",
+			want:  []string{"../eshu/go"},
+		},
+		"local path replace in a block": {
+			goMod: header + "replace (\n\texample.com/a => /src/eshu\n)\n",
+			want:  []string{"/src/eshu"},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			got := forbiddenCoreRequires(test.goMod)
+			got := forbiddenEshuModules(test.goMod, self)
 			if len(got) != len(test.want) {
-				t.Fatalf("forbiddenCoreRequires() = %v, want %v", got, test.want)
+				t.Fatalf("forbiddenEshuModules() = %v, want %v", got, test.want)
 			}
 			for i := range got {
 				if got[i] != test.want[i] {
-					t.Fatalf("forbiddenCoreRequires() = %v, want %v", got, test.want)
+					t.Fatalf("forbiddenEshuModules() = %v, want %v", got, test.want)
 				}
 			}
 		})
@@ -173,22 +216,34 @@ func isStandardOrRelative(importPath string) bool {
 	return !strings.Contains(first, ".")
 }
 
-// forbiddenCoreRequires returns every module path in goMod that is the Eshu
-// core module or lives under it. It scans each non-comment field, so a
-// require in a block, a single-line require, an indirect require, and a
-// replace target are all caught. The module path prefix is github.com/eshu-hq/
-// eshu/go; the SDK modules under github.com/eshu-hq/eshu/sdk/go do not match.
-func forbiddenCoreRequires(goMod string) []string {
-	const core = "github.com/eshu-hq/eshu/go"
+// forbiddenEshuModules returns every module path or local path in goMod that
+// a standalone collector must not depend on: any github.com/eshu-hq/ path other
+// than this module (self) and the published SDK modules under
+// github.com/eshu-hq/eshu/sdk/go/, and the target of a replace that points at a
+// local directory. It scans each non-comment field, so a require in a block, a
+// single-line require, an indirect require, a quoted path, and a replace
+// target are all caught.
+func forbiddenEshuModules(goMod, self string) []string {
+	const (
+		org = "github.com/eshu-hq/"
+		sdk = "github.com/eshu-hq/eshu/sdk/go/"
+	)
 	var found []string
 	for _, line := range strings.Split(goMod, "\n") {
 		if before, _, ok := strings.Cut(line, "//"); ok {
 			line = before
 		}
-		for _, field := range strings.Fields(line) {
-			if field == core || strings.HasPrefix(field, core+"/") {
+		fields := strings.Fields(line)
+		for i, field := range fields {
+			field = strings.Trim(field, "\"`")
+			if i > 0 && fields[i-1] == "=>" && (strings.HasPrefix(field, ".") || strings.HasPrefix(field, "/")) {
 				found = append(found, field)
+				continue
 			}
+			if !strings.HasPrefix(field, org) || field == self || strings.HasPrefix(field, self+"/") || strings.HasPrefix(field, sdk) {
+				continue
+			}
+			found = append(found, field)
 		}
 	}
 	return found
