@@ -35,7 +35,8 @@ type Handler struct {
 	HTTPClient httpx.HTTPDoer
 }
 
-// Summary is the bounded operator view of one Handle call. It carries counts
+// Summary is the bounded view of one Handle call, written to stderr for a
+// local run (see Health: the host drops stderr text today). It carries counts
 // and bounded identifiers only, so it is safe to log.
 type Summary struct {
 	State            sdk.ResultState `json:"state"`

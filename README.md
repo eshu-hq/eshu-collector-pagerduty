@@ -37,7 +37,7 @@ host refuses to activate the component without a producer grant for each one.
 | --- | --- |
 | `complete` | Every list ended on its own. |
 | `partial` | At least one coverage warning was emitted (a page or record bound was hit while PagerDuty had more, a service was hidden by permissions or missing, or a record was unusable). The facts are still committed. |
-| `retryable` | `rate_limited` (HTTP 408, 409, 425, 429), `retryable` (5xx, transport, malformed body), `claim_deadline_exceeded`, or `canceled`. The status carries `retry_after_seconds`. |
+| `retryable` | `rate_limited` (HTTP 408, 409, 425, 429), `retryable` (5xx, transport, malformed body), `claim_deadline_exceeded`, or `canceled`. The collector sends `retry_after_seconds`; the worker does not honor it until eshu-hq/eshu#8908 (see Operator signals). |
 | `terminal` | `auth_denied` (401, 403), `not_found` (404), `terminal` (other 4xx, redirects), or a config problem: `config_invalid`, `credential_missing`, `unsupported_option`, `scope_not_configured`, `invalid_claim`, `result_too_large`, `fact_invalid`. |
 
 A status holds a failure class and counts only. No Result, status, or log line
@@ -87,6 +87,31 @@ suits **allowlist** trust, which the install command above uses. **Strict**
 trust has Eshu run `cosign verify` with those annotations, and this workflow
 does not produce them, so strict trust is not supported yet. Adding it is a
 follow-up.
+
+## Operator signals
+
+Today the extension host passes one thing from a claim's result to the work
+item: the **failure class** (`rate_limited`, `auth_denied`,
+`claim_deadline_exceeded`, ...). The worker does not set a status recorder, so
+everything else in the result's status row is dropped:
+
+- **Dropped: fact count, warning count and source latency.** The collector
+  fills them in, but no dashboard or work item shows them.
+- **Dropped: `retry_after_seconds`.** The collector sends it on every
+  retryable result, but the worker does not honor it yet, so a retryable
+  result gets no retry delay from the collector's guidance.
+- **Dropped: the stderr health line.** The collector writes one
+  `collector health: {...}` line per claim to stderr with the health,
+  resource and claim summary. The host's process runner keeps stderr only as
+  a byte count and drops the text. The line is for a local run
+  (`collector --sdk-stdio < request.json`) and for tests.
+- **No spans or metrics.** The manifest declares
+  `telemetry.metricsPrefix: eshu_dp_pagerduty_collector_`, but nothing in this
+  repository emits a metric under it.
+
+eshu-hq/eshu#8908 tracks recording status rows and honoring the retry delay in
+the worker. Until it lands, find the cause of a failure by running the
+collector with the activation's config and a recorded request.
 
 ## Image and seeding
 
@@ -207,9 +232,10 @@ docker build -t eshu-collector-pagerduty:local .
   collector should set it to at least the lease TTL the in-tree collector ran
   with (5 m in the reference deployment). No timing proof against a
   production-sized account exists yet.
-- **No OpenTelemetry.** The process runner has no metrics endpoint. Operators
-  read the host's recorded statuses (failure class, fact count, warning count,
-  source latency) and the one health line this program writes to standard error.
+- **No OpenTelemetry.** The process runner has no metrics endpoint, and
+  nothing in this repository emits a metric under the manifest's
+  `eshu_dp_pagerduty_collector_` prefix. See Operator signals for what an
+  operator can see today.
 - **Copied helpers.** `internal/stableid` and `internal/httpx` are copies of
   in-tree helpers that the public SDK does not publish yet. Replace both with
   the published eshu-sdk helpers when eshu-hq/eshu#8851 lands.

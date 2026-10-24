@@ -9,10 +9,12 @@ import (
 	"time"
 )
 
-// Health is the operator-visible collector status. Every collector
-// repository exposes these fields (logs, metrics, or status endpoint) so a
-// 3 AM operator can answer: is it alive, is its evidence fresh, what is
-// failing, and what is it costing.
+// Health is the collector's debug summary, written once per claim as part of
+// the "collector health:" line on stderr. It is NOT an operator signal today:
+// the extension host keeps a process's stderr only as a byte count, and the
+// worker records no status row (eshu-hq/eshu#8908), so only the failure class
+// reaches the work item. The line helps a local run of the binary answer: is
+// it alive, is its evidence fresh, what is failing, and what is it costing.
 type Health struct {
 	// Alive is true once the process has started and its config validated.
 	Alive bool `json:"alive"`
@@ -30,7 +32,8 @@ type Health struct {
 	MaxRetryQueueDepth int `json:"max_retry_queue_depth"`
 }
 
-// ResourceUse reports bounded cost for operator dashboards.
+// ResourceUse reports bounded cost in the stderr health line. No dashboard
+// reads it today (see Health).
 type ResourceUse struct {
 	// MaxResultBytes bounds one claim's encoded result. A result over the
 	// bound fails terminal with result_too_large instead of reaching the
