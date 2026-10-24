@@ -37,7 +37,7 @@ host refuses to activate the component without a producer grant for each one.
 | --- | --- |
 | `complete` | Every list ended on its own. |
 | `partial` | At least one coverage warning was emitted (a page or record bound was hit while PagerDuty had more, a service was hidden by permissions or missing, or a record was unusable). The facts are still committed. |
-| `retryable` | `rate_limited` (HTTP 408, 409, 425, 429), `retryable` (5xx, transport, malformed body), `claim_deadline_exceeded`, or `canceled`. The collector sends `retry_after_seconds`; the worker does not honor it until eshu-hq/eshu#8908 (see Operator signals). |
+| `retryable` | `rate_limited` (HTTP 408, 409, 425, 429), `retryable` (5xx, transport, malformed body), `claim_deadline_exceeded`, or `canceled`. The collector sends `retry_after_seconds`; the worker honors it on eshu `main` since eshu-hq/eshu#9008 (see Operator signals). |
 | `terminal` | `auth_denied` (401, 403), `not_found` (404), `terminal` (other 4xx, redirects), or a config problem: `config_invalid`, `credential_missing`, `unsupported_option`, `scope_not_configured`, `invalid_claim`, `result_too_large`, `fact_invalid`. |
 
 A status holds a failure class and counts only. No Result, status, or log line
@@ -90,16 +90,21 @@ follow-up.
 
 ## Operator signals
 
-Today the extension host passes one thing from a claim's result to the work
-item: the **failure class** (`rate_limited`, `auth_denied`,
-`claim_deadline_exceeded`, ...). The worker does not set a status recorder, so
-everything else in the result's status row is dropped:
+The extension host passes the **failure class** (`rate_limited`,
+`auth_denied`, `claim_deadline_exceeded`, ...) from a claim's result to the
+work item. On eshu `main` since eshu-hq/eshu#9008 (a release carries it once
+one is cut after that change), the worker also sets a status recorder: it
+records every claim result as six `eshu_dp_component_extension_*` metrics and
+one `component extension result` log line, and it honors
+`retry_after_seconds`:
 
-- **Dropped: fact count, warning count and source latency.** The collector
-  fills them in, but no dashboard or work item shows them.
-- **Dropped: `retry_after_seconds`.** The collector sends it on every
-  retryable result, but the worker does not honor it yet, so a retryable
-  result gets no retry delay from the collector's guidance.
+- **Recorded: fact count, warning count and source latency.** The collector
+  fills them in, and the host records them in the metrics above.
+- **Honored: `retry_after_seconds`.** The collector sends it on every
+  retryable result. The worker retries after the larger of the poll interval
+  and that request, capped at one hour, until the attempt budget is spent. The
+  `eshu_dp_component_extension_retry_after_seconds` gauge and the log line hold
+  the request, not the applied delay.
 - **Dropped: the stderr health line.** The collector writes one
   `collector health: {...}` line per claim to stderr with the health,
   resource and claim summary. The host's process runner keeps stderr only as
@@ -109,9 +114,9 @@ everything else in the result's status row is dropped:
   `telemetry.metricsPrefix: eshu_dp_pagerduty_collector_`, but nothing in this
   repository emits a metric under it.
 
-eshu-hq/eshu#8908 tracks recording status rows and honoring the retry delay in
-the worker. Until it lands, find the cause of a failure by running the
-collector with the activation's config and a recorded request.
+The host records the failure class, not the cause behind it. Find the cause of
+a failure by running the collector with the activation's config and a recorded
+request.
 
 ## Image and seeding
 
