@@ -1,0 +1,57 @@
+apiVersion: eshu.dev/v1alpha1
+kind: ComponentPackage
+metadata:
+  id: dev.eshu.collector.pagerduty
+  name: PagerDuty collector
+  publisher: eshu-hq
+  version: 0.1.0
+spec:
+  compatibleCore: ">=0.0.5 <0.2.0"
+  componentType: collector
+  collectorKinds:
+    - pagerduty
+  runtime:
+    sdkProtocol: collector-sdk/v1alpha1
+    adapter: process
+  artifacts:
+    - platform: linux/amd64
+      image: ghcr.io/eshu-hq/eshu-collector-pagerduty@sha256:0000000000000000000000000000000000000000000000000000000000000000
+  emittedFacts:
+    - kind: incident.record
+      payloadSchemaRef: incident.record
+      schemaVersions:
+        - 1.0.0
+      sourceConfidence:
+        - reported
+    - kind: incident.lifecycle_event
+      payloadSchemaRef: incident.lifecycle_event
+      schemaVersions:
+        - 1.0.0
+      sourceConfidence:
+        - reported
+    - kind: change.record
+      payloadSchemaRef: change.record
+      schemaVersions:
+        - 1.0.0
+      sourceConfidence:
+        - reported
+    - kind: incident_routing.observed_pagerduty_service
+      payloadSchemaRef: incident_routing.observed_pagerduty_service
+      schemaVersions:
+        - 1.0.0
+      sourceConfidence:
+        - reported
+    - kind: incident_routing.observed_pagerduty_integration
+      payloadSchemaRef: incident_routing.observed_pagerduty_integration
+      schemaVersions:
+        - 1.0.0
+      sourceConfidence:
+        - reported
+    - kind: incident_routing.coverage_warning
+      payloadSchemaRef: incident_routing.coverage_warning
+      schemaVersions:
+        - 1.0.0
+      sourceConfidence:
+        - reported
+  telemetry:
+    metricsPrefix: eshu_dp_pagerduty_collector_

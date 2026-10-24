@@ -1,0 +1,12 @@
+{
+  "description": "Synthetic account read through an allowed_service_ids allowlist: one readable service, one hidden by permissions, one missing.",
+  "responses": [
+    {"path": "/incidents", "body": {"more": false, "incidents": []}},
+    {"path": "/services/PSVC1", "body": {"service": {"id": "PSVC1", "name": "checkout-api", "status": "active", "alert_creation": "create_incidents", "created_at": "2025-01-10T09:00:00Z"}}},
+    {"path": "/services/PSVC1/integrations", "body": {"more": false, "integrations": [
+      {"id": "PINT1", "type": "events_api_v2_inbound_integration", "integration_key": "SYNTHETIC-INTEGRATION-KEY-0001"}
+    ]}},
+    {"path": "/services/PSVC403", "status": 403, "body": {"error": {"message": "Access Denied", "code": 2010}}},
+    {"path": "/services/PSVC404", "status": 404, "body": {"error": {"message": "Not Found", "code": 2100}}}
+  ]
+}

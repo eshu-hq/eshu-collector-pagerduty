@@ -1,0 +1,197 @@
+package pagerduty
+
+// Throwaway golden dumper for eshu-hq/eshu-collector-pagerduty parity. Never committed.
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/eshu-hq/eshu/go/internal/scope"
+	"github.com/eshu-hq/eshu/go/internal/workflow"
+)
+
+type zzCases struct {
+	Now             string `json:"now"`
+	ScopeID         string `json:"scope_id"`
+	AccountID       string `json:"account_id"`
+	InstanceID      string `json:"instance_id"`
+	GenerationID    string `json:"generation_id"`
+	BasePlaceholder string `json:"base_url_placeholder"`
+	Cases           []struct {
+		Name    string          `json:"name"`
+		Fixture string          `json:"fixture"`
+		Config  json.RawMessage `json:"config"`
+	} `json:"cases"`
+}
+
+type zzTarget struct {
+	SourceURI               string   `json:"source_uri"`
+	IncidentLimit           int      `json:"incident_limit"`
+	IncidentLookback        string   `json:"incident_lookback"`
+	LogEntryLimit           int      `json:"log_entry_limit"`
+	ChangeEventLimit        int      `json:"change_event_limit"`
+	AllowedServiceIDs       []string `json:"allowed_service_ids"`
+	ConfigValidationEnabled bool     `json:"config_validation_enabled"`
+	ConfigResourceLimit     int      `json:"config_resource_limit"`
+	PaginationMaxPages      int      `json:"pagination_max_pages"`
+	PaginationMaxRecords    int      `json:"pagination_max_records"`
+}
+
+type zzFixture struct {
+	Responses []struct {
+		Path   string            `json:"path"`
+		Offset int               `json:"offset"`
+		Status int               `json:"status"`
+		Header map[string]string `json:"header"`
+		Body   json.RawMessage   `json:"body"`
+	} `json:"responses"`
+}
+
+func TestZZGoldenDump(t *testing.T) {
+	repo := os.Getenv("PARITY_REPO")
+	out := os.Getenv("PARITY_OUT")
+	if repo == "" || out == "" {
+		t.Skip("PARITY_REPO and PARITY_OUT are required")
+	}
+	raw, err := os.ReadFile(filepath.Join(repo, "testdata", "parity", "cases.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cases zzCases
+	if err := json.Unmarshal(raw, &cases); err != nil {
+		t.Fatal(err)
+	}
+	now, err := time.Parse(time.RFC3339, cases.Now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range cases.Cases {
+		fixtureRaw, err := os.ReadFile(filepath.Join(repo, "testdata", "source", c.Fixture+".json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var fixture zzFixture
+		if err := json.Unmarshal(fixtureRaw, &fixture); err != nil {
+			t.Fatal(err)
+		}
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			offset := 0
+			if v := r.URL.Query().Get("offset"); v != "" {
+				offset, _ = strconv.Atoi(v)
+			}
+			for _, resp := range fixture.Responses {
+				if resp.Path != r.URL.Path || resp.Offset != offset {
+					continue
+				}
+				for k, v := range resp.Header {
+					w.Header().Set(k, v)
+				}
+				status := resp.Status
+				if status == 0 {
+					status = 200
+				}
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(status)
+				_, _ = w.Write(resp.Body)
+				return
+			}
+			w.WriteHeader(404)
+			_, _ = w.Write([]byte(`{"error":{"message":"fixture has no response"}}`))
+		}))
+		var cfg zzTarget
+		if err := json.Unmarshal(c.Config, &cfg); err != nil {
+			t.Fatal(err)
+		}
+		lookback := time.Duration(0)
+		if cfg.IncidentLookback != "" {
+			lookback, err = time.ParseDuration(cfg.IncidentLookback)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		// Mirrors cmd/collector-pagerduty mapTarget.
+		sourceURI := strings.TrimSpace(firstNonBlank(cfg.SourceURI, server.URL))
+		target := TargetConfig{
+			Provider:                ProviderPagerDuty,
+			ScopeID:                 cases.ScopeID,
+			AccountID:               cases.AccountID,
+			Token:                   "SYNTHETIC-API-TOKEN-0001",
+			APIBaseURL:              strings.TrimRight(server.URL, "/"),
+			SourceURI:               sourceURI,
+			IncidentLimit:           cfg.IncidentLimit,
+			IncidentLookback:        lookback,
+			LogEntryLimit:           cfg.LogEntryLimit,
+			ChangeEventLimit:        cfg.ChangeEventLimit,
+			AllowedServiceIDs:       cleanStrings(cfg.AllowedServiceIDs),
+			ConfigValidationEnabled: cfg.ConfigValidationEnabled,
+			ConfigResourceLimit:     cfg.ConfigResourceLimit,
+			PaginationMaxPages:      cfg.PaginationMaxPages,
+			PaginationMaxRecords:    cfg.PaginationMaxRecords,
+		}
+		source, err := NewClaimedSource(SourceConfig{
+			CollectorInstanceID: cases.InstanceID,
+			Targets:             []TargetConfig{target},
+			Now:                 func() time.Time { return now },
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		gen, ok, err := source.NextClaimed(context.Background(), workflow.WorkItem{
+			CollectorInstanceID: cases.InstanceID,
+			CollectorKind:       scope.CollectorPagerDuty,
+			GenerationID:        cases.GenerationID,
+			ScopeID:             cases.ScopeID,
+			CurrentFencingToken: 7,
+		})
+		if err != nil || !ok {
+			t.Fatalf("case %s: NextClaimed ok=%v err=%v", c.Name, ok, err)
+		}
+		facts := []map[string]any{}
+		for env := range gen.Facts {
+			facts = append(facts, map[string]any{
+				"kind":              env.FactKind,
+				"stable_key":        env.StableFactKey,
+				"schema_version":    env.SchemaVersion,
+				"source_confidence": env.SourceConfidence,
+				"observed_at":       env.ObservedAt.UTC().Format(time.RFC3339Nano),
+				"scope_id":          env.ScopeID,
+				"generation_id":     env.GenerationID,
+				"source_uri":        env.SourceRef.SourceURI,
+				"source_record_id":  env.SourceRef.SourceRecordID,
+				"payload":           env.Payload,
+			})
+		}
+		doc := map[string]any{
+			"case": c.Name,
+			"scope": map[string]any{
+				"id":   gen.Scope.ScopeID,
+				"kind": string(gen.Scope.ScopeKind),
+			},
+			"generation": map[string]any{
+				"id":               gen.Generation.GenerationID,
+				"observed_at":      gen.Generation.ObservedAt.UTC().Format(time.RFC3339Nano),
+				"freshness_hint":   gen.Generation.FreshnessHint,
+				"trusted_deletion": gen.Generation.TrustedDeletion,
+			},
+			"unchanged": gen.Unchanged,
+			"facts":     facts,
+		}
+		encoded, err := json.MarshalIndent(doc, "", "  ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := strings.ReplaceAll(string(encoded), server.URL, cases.BasePlaceholder)
+		if err := os.WriteFile(filepath.Join(out, c.Name+".json"), []byte(text+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		server.Close()
+	}
+}

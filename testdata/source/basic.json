@@ -1,0 +1,140 @@
+{
+  "description": "Synthetic account: two incidents, lifecycle events, related change events, two services, and integrations that carry provider keys.",
+  "responses": [
+    {
+      "path": "/incidents",
+      "body": {
+        "more": false,
+        "incidents": [
+          {
+            "id": "PINC1",
+            "incident_number": 101,
+            "title": "Checkout latency high",
+            "status": "resolved",
+            "urgency": "high",
+            "priority": {"id": "PPRI1", "type": "priority_reference", "summary": "P1", "html_url": "https://example.invalid/priorities/PPRI1"},
+            "service": {"id": "PSVC1", "type": "service_reference", "summary": "checkout-api", "html_url": "https://example.invalid/service-directory/PSVC1"},
+            "escalation_policy": {"id": "PEP1", "type": "escalation_policy_reference", "summary": "Checkout escalation"},
+            "teams": [{"id": "PTEAM1", "type": "team_reference", "summary": "Checkout"}],
+            "assignments": [{"assignee": {"id": "PUSER1", "type": "user_reference", "summary": "On Call One", "html_url": "https://example.invalid/users/PUSER1"}}],
+            "created_at": "2026-10-20T10:15:00Z",
+            "updated_at": "2026-10-20T11:00:00Z",
+            "resolved_at": "2026-10-20T11:00:00Z",
+            "html_url": "https://example.invalid/incidents/PINC1?token=do-not-keep&view=timeline"
+          },
+          {
+            "id": "PINC2",
+            "incident_number": "102",
+            "title": "Search index lag",
+            "status": "triggered",
+            "urgency": "low",
+            "service": {"id": "PSVC2", "type": "service_reference", "summary": "search-api"},
+            "created_at": "2026-10-20T11:30:00Z",
+            "updated_at": "2026-10-20T11:30:00Z"
+          }
+        ]
+      }
+    },
+    {
+      "path": "/incidents/PINC1/log_entries",
+      "body": {
+        "more": false,
+        "log_entries": [
+          {
+            "id": "PLOG1",
+            "type": "trigger_log_entry",
+            "summary": "Triggered through the API",
+            "created_at": "2026-10-20T10:15:00Z",
+            "agent": {"id": "PSVC1", "type": "service_reference", "summary": "checkout-api"},
+            "channel": {"type": "api"},
+            "html_url": "https://example.invalid/incidents/PINC1/log_entries/PLOG1"
+          },
+          {
+            "id": "PLOG2",
+            "type": "resolve_log_entry",
+            "summary": "Resolved by On Call One",
+            "created_at": "2026-10-20T11:00:00Z",
+            "agent": {"id": "PUSER1", "type": "user_reference", "summary": "On Call One"},
+            "channel": {"type": "web_ui"}
+          }
+        ]
+      }
+    },
+    {"path": "/incidents/PINC2/log_entries", "body": {"more": false, "log_entries": []}},
+    {
+      "path": "/incidents/PINC1/related_change_events",
+      "body": {
+        "more": false,
+        "change_events": [
+          {
+            "id": "PCHG1",
+            "summary": "Deploy checkout-api 2026.10.20",
+            "source": "ci-system",
+            "timestamp": "2026-10-20T10:00:00Z",
+            "html_url": "https://example.invalid/change-events/PCHG1",
+            "services": [{"id": "PSVC1", "type": "service_reference", "summary": "checkout-api"}],
+            "links": [
+              {"href": "https://example.invalid/deploys/1?api_key=do-not-keep&env=prod", "text": "deploy"},
+              {"href": "", "text": "release notes"}
+            ]
+          }
+        ]
+      }
+    },
+    {"path": "/incidents/PINC2/related_change_events", "body": {"more": false, "change_events": []}},
+    {
+      "path": "/services",
+      "body": {
+        "more": false,
+        "services": [
+          {
+            "id": "PSVC1",
+            "name": "checkout-api",
+            "summary": "checkout-api",
+            "status": "active",
+            "alert_creation": "create_alerts_and_incidents",
+            "escalation_policy": {"id": "PEP1", "type": "escalation_policy_reference"},
+            "teams": [{"id": "PTEAM1", "type": "team_reference"}],
+            "created_at": "2025-01-10T09:00:00Z",
+            "updated_at": "2026-09-01T09:00:00Z",
+            "html_url": "https://example.invalid/service-directory/PSVC1"
+          },
+          {
+            "id": "PSVC2",
+            "name": "search-api",
+            "status": "disabled",
+            "alert_creation": "create_incidents",
+            "created_at": "2025-02-01T09:00:00Z",
+            "updated_at": "2026-08-01T09:00:00Z"
+          }
+        ]
+      }
+    },
+    {
+      "path": "/services/PSVC1/integrations",
+      "body": {
+        "more": false,
+        "integrations": [
+          {
+            "id": "PINT1",
+            "name": "Events API v2",
+            "type": "events_api_v2_inbound_integration",
+            "vendor": {"id": "PVEN1", "type": "vendor_reference"},
+            "integration_key": "SYNTHETIC-INTEGRATION-KEY-0001",
+            "created_at": "2025-01-10T09:05:00Z",
+            "html_url": "https://example.invalid/services/PSVC1/integrations/PINT1"
+          },
+          {
+            "id": "PINT2",
+            "summary": "Legacy webhook",
+            "type": "generic_events_api_inbound_integration",
+            "routing_key": "SYNTHETIC-ROUTING-KEY-0002",
+            "status": "disabled"
+          },
+          {"id": "PINT3", "type": "email_inbound_integration"}
+        ]
+      }
+    },
+    {"path": "/services/PSVC2/integrations", "body": {"more": false, "integrations": []}}
+  ]
+}

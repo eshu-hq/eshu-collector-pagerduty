@@ -1,0 +1,57 @@
+{
+  "description": "Parity cases replayed through both the in-tree collector and this collector. Config keys are the activation config keys; api_base_url is always the fixture server.",
+  "now": "2026-10-20T12:00:00Z",
+  "scope_id": "pagerduty:account:synthetic-1",
+  "scope_kind": "pagerduty_account",
+  "account_id": "synthetic-1",
+  "instance_id": "pagerduty-primary",
+  "generation_id": "generation-1",
+  "source_system": "pagerduty",
+  "base_url_placeholder": "{{BASE_URL}}",
+  "cases": [
+    {
+      "name": "incidents-basic",
+      "fixture": "basic",
+      "config": {"source_uri": "https://pagerduty.example.invalid"}
+    },
+    {
+      "name": "config-full",
+      "fixture": "basic",
+      "config": {"source_uri": "https://pagerduty.example.invalid", "config_validation_enabled": true}
+    },
+    {
+      "name": "no-source-uri",
+      "fixture": "basic",
+      "config": {"config_validation_enabled": true}
+    },
+    {
+      "name": "paged-natural",
+      "fixture": "paged",
+      "config": {"source_uri": "https://pagerduty.example.invalid"}
+    },
+    {
+      "name": "paged-page-bound",
+      "fixture": "paged",
+      "config": {"source_uri": "https://pagerduty.example.invalid", "pagination_max_pages": 2}
+    },
+    {
+      "name": "paged-record-bound",
+      "fixture": "paged",
+      "config": {"source_uri": "https://pagerduty.example.invalid", "pagination_max_records": 3}
+    },
+    {
+      "name": "allowed-services",
+      "fixture": "allowed-services",
+      "config": {
+        "source_uri": "https://pagerduty.example.invalid",
+        "config_validation_enabled": true,
+        "allowed_service_ids": ["PSVC1", "PSVC403", "PSVC404"]
+      }
+    },
+    {
+      "name": "empty-account",
+      "fixture": "empty",
+      "config": {"source_uri": "https://pagerduty.example.invalid"}
+    }
+  ]
+}

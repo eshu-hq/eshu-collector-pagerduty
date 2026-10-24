@@ -1,0 +1,163 @@
+{
+  "protocol_version": "collector-sdk/v1alpha1",
+  "state": "partial",
+  "claim": {
+    "component_id": "dev.eshu.collector.pagerduty",
+    "instance_id": "pagerduty-primary",
+    "collector_kind": "pagerduty",
+    "source_system": "pagerduty",
+    "scope": {
+      "id": "pagerduty:account:synthetic-1",
+      "kind": "pagerduty_account"
+    },
+    "source_run_id": "run-1",
+    "generation_id": "generation-1",
+    "work_item_id": "work-1",
+    "fencing_token": "7",
+    "attempt": 1,
+    "deadline": "2099-01-01T00:00:00Z",
+    "config_handle": "component-config:pagerduty"
+  },
+  "generation": {
+    "id": "generation-1",
+    "observed_at": "2026-10-20T12:00:00Z",
+    "freshness_hint": "b8b6f85ed6039c55279713f296c66887c84a0720bb4b5312879049214cc0c09d"
+  },
+  "facts": [
+    {
+      "kind": "incident_routing.observed_pagerduty_service",
+      "schema_version": "1.0.0",
+      "stable_key": "ed76bd4230a68ed96697771adcfb44d5a6fa593f6e6825165f4aa1e9c1f83651",
+      "source_confidence": "reported",
+      "observed_at": "2026-10-20T12:00:00Z",
+      "source_ref": {
+        "source_system": "pagerduty",
+        "scope_id": "pagerduty:account:synthetic-1",
+        "generation_id": "generation-1",
+        "fact_key": "ed76bd4230a68ed96697771adcfb44d5a6fa593f6e6825165f4aa1e9c1f83651",
+        "uri": "https://pagerduty.example.invalid",
+        "record_id": "PSVC1"
+      },
+      "payload": {
+        "alert_creation": "create_incidents",
+        "collector_instance_id": "pagerduty-primary",
+        "created_at": "2025-01-10T09:00:00Z",
+        "declared_match_state": "not_compared",
+        "name_fingerprint": "sha256:d737056eff789f916ba6eed388879a67ea8ae501eb9ccdd185ddcc9cd7daafb3",
+        "outcome": "observed",
+        "provider": "pagerduty",
+        "provider_object_id": "PSVC1",
+        "redaction_state": "applied",
+        "resource_class": "service",
+        "scope_id": "pagerduty:account:synthetic-1",
+        "service_id": "PSVC1",
+        "source_class": "observed",
+        "source_kind": "pagerduty_api",
+        "source_url": "https://pagerduty.example.invalid",
+        "status": "active"
+      }
+    },
+    {
+      "kind": "incident_routing.observed_pagerduty_integration",
+      "schema_version": "1.0.0",
+      "stable_key": "f5861e4a474ef5fab8b7562f03332156ccf3ac4081e9012206fd51cc7cb428d9",
+      "source_confidence": "reported",
+      "observed_at": "2026-10-20T12:00:00Z",
+      "source_ref": {
+        "source_system": "pagerduty",
+        "scope_id": "pagerduty:account:synthetic-1",
+        "generation_id": "generation-1",
+        "fact_key": "f5861e4a474ef5fab8b7562f03332156ccf3ac4081e9012206fd51cc7cb428d9",
+        "uri": "https://pagerduty.example.invalid",
+        "record_id": "PINT1"
+      },
+      "payload": {
+        "collector_instance_id": "pagerduty-primary",
+        "declared_match_state": "not_compared",
+        "integration_id": "PINT1",
+        "integration_type": "events_api_v2_inbound_integration",
+        "outcome": "observed",
+        "provider": "pagerduty",
+        "provider_object_id": "PINT1",
+        "redaction_state": "applied",
+        "resource_class": "service_integration",
+        "routing_key_redacted": true,
+        "scope_id": "pagerduty:account:synthetic-1",
+        "service_reference": "PSVC1",
+        "source_class": "observed",
+        "source_kind": "pagerduty_api",
+        "source_url": "https://pagerduty.example.invalid"
+      },
+      "redactions": [
+        {
+          "field": "integration_key",
+          "reason": "credential-redacted"
+        }
+      ]
+    },
+    {
+      "kind": "incident_routing.coverage_warning",
+      "schema_version": "1.0.0",
+      "stable_key": "cf63c139afa5eafe356ae43d7a3499b0645c7a628b1cdecdb347bafd6ef21931",
+      "source_confidence": "reported",
+      "observed_at": "2026-10-20T12:00:00Z",
+      "source_ref": {
+        "source_system": "pagerduty",
+        "scope_id": "pagerduty:account:synthetic-1",
+        "generation_id": "generation-1",
+        "fact_key": "cf63c139afa5eafe356ae43d7a3499b0645c7a628b1cdecdb347bafd6ef21931",
+        "uri": "https://pagerduty.example.invalid",
+        "record_id": "PSVC403"
+      },
+      "payload": {
+        "collector_instance_id": "pagerduty-primary",
+        "declared_match_state": "not_compared",
+        "outcome": "partial",
+        "provider": "pagerduty",
+        "provider_object_id": "PSVC403",
+        "reason": "permission_hidden",
+        "redaction_state": "none",
+        "resource_class": "service",
+        "scope_id": "pagerduty:account:synthetic-1",
+        "source_class": "observed",
+        "source_kind": "pagerduty_api"
+      }
+    },
+    {
+      "kind": "incident_routing.coverage_warning",
+      "schema_version": "1.0.0",
+      "stable_key": "b2a4061d074137866d4ea8436556abf43cf3c4a8e61ab78ad52c415d90195a94",
+      "source_confidence": "reported",
+      "observed_at": "2026-10-20T12:00:00Z",
+      "source_ref": {
+        "source_system": "pagerduty",
+        "scope_id": "pagerduty:account:synthetic-1",
+        "generation_id": "generation-1",
+        "fact_key": "b2a4061d074137866d4ea8436556abf43cf3c4a8e61ab78ad52c415d90195a94",
+        "uri": "https://pagerduty.example.invalid",
+        "record_id": "PSVC404"
+      },
+      "payload": {
+        "collector_instance_id": "pagerduty-primary",
+        "declared_match_state": "not_compared",
+        "outcome": "partial",
+        "provider": "pagerduty",
+        "provider_object_id": "PSVC404",
+        "reason": "missing",
+        "redaction_state": "none",
+        "resource_class": "service",
+        "scope_id": "pagerduty:account:synthetic-1",
+        "source_class": "observed",
+        "source_kind": "pagerduty_api"
+      }
+    }
+  ],
+  "statuses": [
+    {
+      "class": "warning",
+      "partial": true,
+      "warning_count": 2,
+      "fact_count": 4
+    }
+  ]
+}

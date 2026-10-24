@@ -1,0 +1,26 @@
+{
+  "description": "Synthetic account whose incident list keeps reporting more pages, to exercise the page and record bounds.",
+  "responses": [
+    {"path": "/incidents", "offset": 0, "body": {"more": true, "incidents": [
+      {"id": "PINC10", "incident_number": 10, "title": "one", "status": "resolved", "urgency": "low", "service": {"id": "PSVC1", "type": "service_reference", "summary": "svc"}, "created_at": "2026-10-20T08:00:00Z"},
+      {"id": "PINC11", "incident_number": 11, "title": "two", "status": "resolved", "urgency": "low", "service": {"id": "PSVC1", "type": "service_reference", "summary": "svc"}, "created_at": "2026-10-20T08:10:00Z"}
+    ]}},
+    {"path": "/incidents", "offset": 2, "body": {"more": true, "incidents": [
+      {"id": "PINC12", "incident_number": 12, "title": "three", "status": "resolved", "urgency": "low", "service": {"id": "PSVC1", "type": "service_reference", "summary": "svc"}, "created_at": "2026-10-20T08:20:00Z"},
+      {"id": "PINC13", "incident_number": 13, "title": "four", "status": "resolved", "urgency": "low", "service": {"id": "PSVC1", "type": "service_reference", "summary": "svc"}, "created_at": "2026-10-20T08:30:00Z"}
+    ]}},
+    {"path": "/incidents", "offset": 4, "body": {"more": false, "incidents": [
+      {"id": "PINC14", "incident_number": 14, "title": "five", "status": "resolved", "urgency": "low", "service": {"id": "PSVC1", "type": "service_reference", "summary": "svc"}, "created_at": "2026-10-20T08:40:00Z"}
+    ]}},
+    {"path": "/incidents/PINC10/log_entries", "body": {"more": false, "log_entries": []}},
+    {"path": "/incidents/PINC11/log_entries", "body": {"more": false, "log_entries": []}},
+    {"path": "/incidents/PINC12/log_entries", "body": {"more": false, "log_entries": []}},
+    {"path": "/incidents/PINC13/log_entries", "body": {"more": false, "log_entries": []}},
+    {"path": "/incidents/PINC14/log_entries", "body": {"more": false, "log_entries": []}},
+    {"path": "/incidents/PINC10/related_change_events", "body": {"more": false, "change_events": []}},
+    {"path": "/incidents/PINC11/related_change_events", "body": {"more": false, "change_events": []}},
+    {"path": "/incidents/PINC12/related_change_events", "body": {"more": false, "change_events": []}},
+    {"path": "/incidents/PINC13/related_change_events", "body": {"more": false, "change_events": []}},
+    {"path": "/incidents/PINC14/related_change_events", "body": {"more": false, "change_events": []}}
+  ]
+}

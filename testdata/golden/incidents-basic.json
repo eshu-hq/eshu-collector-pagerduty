@@ -1,0 +1,198 @@
+{
+  "case": "incidents-basic",
+  "facts": [
+    {
+      "generation_id": "generation-1",
+      "kind": "incident.record",
+      "observed_at": "2026-10-20T12:00:00Z",
+      "payload": {
+        "assignments": [
+          {
+            "id": "PUSER1",
+            "summary": "On Call One",
+            "type": "user_reference",
+            "url": "https://example.invalid/users/PUSER1"
+          }
+        ],
+        "collector_instance_id": "pagerduty-primary",
+        "created_at": "2026-10-20T10:15:00Z",
+        "escalation_policy": {
+          "id": "PEP1",
+          "summary": "Checkout escalation",
+          "type": "escalation_policy_reference"
+        },
+        "incident_number": 101,
+        "priority": {
+          "id": "PPRI1",
+          "summary": "P1",
+          "type": "priority_reference",
+          "url": "https://example.invalid/priorities/PPRI1"
+        },
+        "provider": "pagerduty",
+        "provider_incident_id": "PINC1",
+        "resolved_at": "2026-10-20T11:00:00Z",
+        "service": {
+          "id": "PSVC1",
+          "summary": "checkout-api",
+          "type": "service_reference",
+          "url": "https://example.invalid/service-directory/PSVC1"
+        },
+        "service_id": "PSVC1",
+        "source_url": "https://example.invalid/incidents/PINC1?view=timeline",
+        "status": "resolved",
+        "teams": [
+          {
+            "id": "PTEAM1",
+            "summary": "Checkout",
+            "type": "team_reference"
+          }
+        ],
+        "title": "Checkout latency high",
+        "updated_at": "2026-10-20T11:00:00Z",
+        "urgency": "high"
+      },
+      "schema_version": "1.0.0",
+      "scope_id": "pagerduty:account:synthetic-1",
+      "source_confidence": "reported",
+      "source_record_id": "PINC1",
+      "source_uri": "https://example.invalid/incidents/PINC1?view=timeline",
+      "stable_key": "443bbf556c8b7a9f829c086fb87e2ea8c25cff862364bfc1ecbcbb207beaeb42"
+    },
+    {
+      "generation_id": "generation-1",
+      "kind": "incident.lifecycle_event",
+      "observed_at": "2026-10-20T12:00:00Z",
+      "payload": {
+        "actor": {
+          "id": "PSVC1",
+          "summary": "checkout-api",
+          "type": "service_reference"
+        },
+        "channel": "api",
+        "collector_instance_id": "pagerduty-primary",
+        "created_at": "2026-10-20T10:15:00Z",
+        "event_type": "trigger_log_entry",
+        "provider": "pagerduty",
+        "provider_event_id": "PLOG1",
+        "provider_incident_id": "PINC1",
+        "source_url": "https://example.invalid/incidents/PINC1/log_entries/PLOG1",
+        "summary": "Triggered through the API"
+      },
+      "schema_version": "1.0.0",
+      "scope_id": "pagerduty:account:synthetic-1",
+      "source_confidence": "reported",
+      "source_record_id": "PLOG1",
+      "source_uri": "https://example.invalid/incidents/PINC1/log_entries/PLOG1",
+      "stable_key": "fc7f8d0f44939f62ee8b3272f5fd350c18a800dde226704e8932ab0c8cdeb2c4"
+    },
+    {
+      "generation_id": "generation-1",
+      "kind": "incident.lifecycle_event",
+      "observed_at": "2026-10-20T12:00:00Z",
+      "payload": {
+        "actor": {
+          "id": "PUSER1",
+          "summary": "On Call One",
+          "type": "user_reference"
+        },
+        "channel": "web_ui",
+        "collector_instance_id": "pagerduty-primary",
+        "created_at": "2026-10-20T11:00:00Z",
+        "event_type": "resolve_log_entry",
+        "provider": "pagerduty",
+        "provider_event_id": "PLOG2",
+        "provider_incident_id": "PINC1",
+        "source_url": "https://example.invalid/incidents/PINC1?view=timeline",
+        "summary": "Resolved by On Call One"
+      },
+      "schema_version": "1.0.0",
+      "scope_id": "pagerduty:account:synthetic-1",
+      "source_confidence": "reported",
+      "source_record_id": "PLOG2",
+      "source_uri": "https://example.invalid/incidents/PINC1?view=timeline",
+      "stable_key": "7836335b42dced4c7febc04dd23f912594b4c9cf9880aaaddef28e000ccb4cef"
+    },
+    {
+      "generation_id": "generation-1",
+      "kind": "change.record",
+      "observed_at": "2026-10-20T12:00:00Z",
+      "payload": {
+        "collector_instance_id": "pagerduty-primary",
+        "links": [
+          {
+            "href": "https://example.invalid/deploys/1?env=prod",
+            "text": "deploy"
+          },
+          {
+            "href": "",
+            "text": "release notes"
+          }
+        ],
+        "provider": "pagerduty",
+        "provider_change_id": "PCHG1",
+        "services": [
+          {
+            "id": "PSVC1",
+            "summary": "checkout-api",
+            "type": "service_reference"
+          }
+        ],
+        "source": "ci-system",
+        "source_url": "https://example.invalid/change-events/PCHG1",
+        "summary": "Deploy checkout-api 2026.10.20",
+        "timestamp": "2026-10-20T10:00:00Z"
+      },
+      "schema_version": "1.0.0",
+      "scope_id": "pagerduty:account:synthetic-1",
+      "source_confidence": "reported",
+      "source_record_id": "PCHG1",
+      "source_uri": "https://example.invalid/change-events/PCHG1",
+      "stable_key": "0b177c021597ac1ee3a8ef440dee01e54811ff8a762161859bc6ed5115eb5158"
+    },
+    {
+      "generation_id": "generation-1",
+      "kind": "incident.record",
+      "observed_at": "2026-10-20T12:00:00Z",
+      "payload": {
+        "assignments": null,
+        "collector_instance_id": "pagerduty-primary",
+        "created_at": "2026-10-20T11:30:00Z",
+        "escalation_policy": null,
+        "incident_number": 102,
+        "priority": null,
+        "provider": "pagerduty",
+        "provider_incident_id": "PINC2",
+        "resolved_at": "",
+        "service": {
+          "id": "PSVC2",
+          "summary": "search-api",
+          "type": "service_reference"
+        },
+        "service_id": "PSVC2",
+        "source_url": "https://pagerduty.example.invalid",
+        "status": "triggered",
+        "teams": null,
+        "title": "Search index lag",
+        "updated_at": "2026-10-20T11:30:00Z",
+        "urgency": "low"
+      },
+      "schema_version": "1.0.0",
+      "scope_id": "pagerduty:account:synthetic-1",
+      "source_confidence": "reported",
+      "source_record_id": "PINC2",
+      "source_uri": "https://pagerduty.example.invalid",
+      "stable_key": "dfc39908adf4f5b06b028f6a33eeed48ddb1e2193f15f09510691dc6f75dce59"
+    }
+  ],
+  "generation": {
+    "freshness_hint": "aaee77f27209a218da23921e5ef09ab88b01b143689ffd6959e50e4813d0d30b",
+    "id": "generation-1",
+    "observed_at": "2026-10-20T12:00:00Z",
+    "trusted_deletion": false
+  },
+  "scope": {
+    "id": "pagerduty:account:synthetic-1",
+    "kind": "pagerduty_account"
+  },
+  "unchanged": false
+}
