@@ -38,6 +38,12 @@ jobs:
           test -n "${version}"
           test "v${version}" = "${TAG_NAME%%-*}"
 
+      # The tagged commit's time pins the image's created time, so a re-run of
+      # this job for the same tag does not stamp a different one.
+      - name: Compute the source date epoch
+        id: epoch
+        run: echo "epoch=$(git log -1 --format=%ct)" >> "${GITHUB_OUTPUT}"
+
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
       - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
@@ -56,6 +62,8 @@ jobs:
           push: true
           provenance: false
           sbom: false
+          build-args: |
+            SOURCE_DATE_EPOCH=${{ steps.epoch.outputs.epoch }}
           tags: ghcr.io/eshu-hq/eshu-collector-pagerduty:${{ github.ref_name }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
@@ -83,6 +91,7 @@ jobs:
           subject-name: ghcr.io/eshu-hq/eshu-collector-pagerduty
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
+          create-storage-record: false
 
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
@@ -124,9 +133,20 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           OCI_IMAGE_REF: oci://ghcr.io/eshu-hq/eshu-collector-pagerduty@${{ steps.build.outputs.digest }}
         run: |
+          # actions/attest names the SBOM predicate after the file's own
+          # spdxVersion ("SPDX-2.3" becomes .../Document/v2.3), so read it
+          # from the file instead of assuming a version.
+          spdx_version="$(jq -r '.spdxVersion // empty' eshu-collector-pagerduty.spdx.json)"
+          case "${spdx_version}" in
+            SPDX-[0-9]*) ;;
+            *)
+              echo "::error::The SBOM has no usable spdxVersion (got '${spdx_version}')."
+              exit 1
+              ;;
+          esac
           gh attestation verify "${OCI_IMAGE_REF}" -R "${GITHUB_REPOSITORY}"
           gh attestation verify "${OCI_IMAGE_REF}" -R "${GITHUB_REPOSITORY}" \
-            --predicate-type https://spdx.dev/Document/v2.3
+            --predicate-type "https://spdx.dev/Document/v${spdx_version#SPDX-}"
 
       - name: Require the package to be public
         env:
@@ -135,7 +155,17 @@ jobs:
           # A fresh Docker config carries no registry credentials, so this
           # pull is anonymous. The activation pulls the image without a token.
           anonymous="$(mktemp -d)"
-          if ! DOCKER_CONFIG="${anonymous}" docker buildx imagetools inspect "${IMAGE_REF}" > /dev/null; then
-            echo "::error::The package is not publicly readable. Set the package visibility to public, then re-run this job."
+          if ! DOCKER_CONFIG="${anonymous}" docker buildx version > /dev/null 2>&1; then
+            echo "::error::docker buildx is unavailable under an empty Docker config, so the anonymous-pull check could not run."
+            exit 1
+          fi
+          if ! output="$(DOCKER_CONFIG="${anonymous}" docker buildx imagetools inspect "${IMAGE_REF}" 2>&1)"; then
+            # Only an access refusal means the package is private. Any other
+            # failure (network, registry outage) says so instead.
+            if printf '%s' "${output}" | grep -Eqi 'unauthorized|denied|forbidden'; then
+              echo "::error::The package is not publicly readable. Set the package visibility to public, then re-run this job."
+            else
+              echo "::error::The anonymous-pull check failed for a reason other than access: ${output}"
+            fi
             exit 1
           fi

@@ -18,6 +18,7 @@ const (
 	releaseImage      = "ghcr.io/eshu-hq/eshu-collector-pagerduty"
 	releaseDigestExpr = "${{ steps.build.outputs.digest }}"
 	releaseDigestRef  = releaseImage + "@" + releaseDigestExpr
+	releaseEpochExpr  = "${{ steps.epoch.outputs.epoch }}"
 	releaseOIDCIssuer = "https://token.actions.githubusercontent.com"
 	releaseIdentity   = "https://github.com/${{ github.workflow_ref }}"
 )
@@ -33,13 +34,14 @@ var releasePermissions = map[string]string{
 }
 
 var (
-	pinnedAction     = regexp.MustCompile(`^[\w./-]+@[0-9a-f]{40}$`)
-	secretRefs       = regexp.MustCompile(`secrets\.([A-Za-z0-9_]+)`)
-	platformRefs     = regexp.MustCompile(`linux/[a-z0-9]+`)
-	platformLine     = regexp.MustCompile(`(?m)^\s*platforms: linux/amd64$`)
-	expressionInRun  = regexp.MustCompile(`\$\{\{|format\(|github\.token`)
-	weakVerifyFlags  = []string{"-regexp", "--insecure", "--allow-insecure", "--private-infrastructure"}
-	attestVerifyFlag = "gh attestation verify"
+	pinnedAction         = regexp.MustCompile(`^[\w./-]+@[0-9a-f]{40}$`)
+	secretRefs           = regexp.MustCompile(`secrets\.([A-Za-z0-9_]+)`)
+	platformRefs         = regexp.MustCompile(`linux/[a-z0-9]+`)
+	platformLine         = regexp.MustCompile(`(?m)^\s*platforms: linux/amd64$`)
+	expressionInRun      = regexp.MustCompile(`\$\{\{|format\(|github\.token`)
+	weakVerifyFlags      = []string{"-regexp", "--insecure", "--allow-insecure", "--private-infrastructure"}
+	attestVerifyFlag     = "gh attestation verify"
+	hardcodedSPDXVersion = regexp.MustCompile(`spdx\.dev/Document/v[0-9]`)
 )
 
 type workflowStep struct {
@@ -191,6 +193,11 @@ func checkBuild(c *contract, steps []workflowStep) {
 	}
 	c.need(build.with("platforms") == "linux/amd64", "build platforms is %q, want exactly linux/amd64", build.with("platforms"))
 	c.need(build.with("push") == "true", "build push is %q, want true", build.with("push"))
+	c.need(strings.Contains(build.with("build-args"), "SOURCE_DATE_EPOCH="+releaseEpochExpr),
+		"build-args is %q, want SOURCE_DATE_EPOCH from the epoch step", build.with("build-args"))
+	epoch, ok := findStep(steps, func(s workflowStep) bool { return s.ID == "epoch" })
+	c.need(ok && strings.Contains(epoch.Run, "git log -1 --format=%ct") && strings.Contains(epoch.Run, "GITHUB_OUTPUT"),
+		"no step with id epoch writes the tagged commit time to GITHUB_OUTPUT")
 }
 
 func checkAttestations(c *contract, steps []workflowStep) {
@@ -201,6 +208,8 @@ func checkAttestations(c *contract, steps []workflowStep) {
 		c.need(provenance.with("subject-name") == releaseImage, "provenance subject-name is %q", provenance.with("subject-name"))
 		c.need(provenance.with("subject-digest") == releaseDigestExpr, "provenance subject-digest is %q, want the build digest", provenance.with("subject-digest"))
 		c.need(provenance.with("push-to-registry") == "true", "provenance push-to-registry is %q, want true", provenance.with("push-to-registry"))
+		c.need(provenance.with("create-storage-record") == "false",
+			"provenance create-storage-record is %q, want false (the job holds no artifact-metadata permission)", provenance.with("create-storage-record"))
 	}
 	generate, ok := stepUsing(steps, "anchore/sbom-action@")
 	attest, attested := stepUsing(steps, "actions/attest@")
@@ -262,8 +271,10 @@ func checkGuards(c *contract, workflow releaseWorkflow, steps []workflowStep) {
 		c.need(strings.Count(verifyAttest.Run, attestVerifyFlag) >= 2, "want %q for provenance and for the SBOM", attestVerifyFlag)
 		c.need(strings.Count(verifyAttest.Run, `-R "${GITHUB_REPOSITORY}"`) == strings.Count(verifyAttest.Run, attestVerifyFlag),
 			"every %q must pin the repository with -R", attestVerifyFlag)
-		c.need(strings.Contains(verifyAttest.Run, "--predicate-type") && strings.Contains(verifyAttest.Run, "spdx.dev/Document"),
-			"no %q checks the SPDX predicate", attestVerifyFlag)
+		c.need(strings.Contains(verifyAttest.Run, `--predicate-type "https://spdx.dev/Document/v${spdx_version#SPDX-}"`),
+			"no %q checks the SPDX predicate built from the SBOM's own spdxVersion", attestVerifyFlag)
+		c.need(!hardcodedSPDXVersion.MatchString(verifyAttest.Run), "the SPDX predicate version is hardcoded; read spdxVersion from the SBOM")
+		c.need(strings.Contains(verifyAttest.Run, `jq -r '.spdxVersion // empty'`), "the verify step does not read spdxVersion from the SBOM file")
 		c.need(verifyAttest.Env["OCI_IMAGE_REF"] == "oci://"+releaseDigestRef, "OCI_IMAGE_REF is %q, want the digest reference", verifyAttest.Env["OCI_IMAGE_REF"])
 	}
 	anonymous, ok := stepRunning(steps, "imagetools inspect")
@@ -271,7 +282,14 @@ func checkGuards(c *contract, workflow releaseWorkflow, steps []workflowStep) {
 		c.add("workflow has no anonymous-pull check")
 		return
 	}
-	for _, want := range []string{`mktemp -d`, `DOCKER_CONFIG="${anonymous}"`, `imagetools inspect "${IMAGE_REF}"`, `exit 1`} {
+	for _, want := range []string{
+		`mktemp -d`,
+		`DOCKER_CONFIG="${anonymous}" docker buildx version`,
+		`DOCKER_CONFIG="${anonymous}" docker buildx imagetools inspect "${IMAGE_REF}" 2>&1`,
+		`grep -Eqi 'unauthorized|denied|forbidden'`,
+		`not publicly readable`,
+		`exit 1`,
+	} {
 		c.need(strings.Contains(anonymous.Run, want), "anonymous-pull check lacks %q", want)
 	}
 	c.need(anonymous.Env["IMAGE_REF"] == releaseDigestRef, "anonymous-pull IMAGE_REF is %q, want the digest reference", anonymous.Env["IMAGE_REF"])
