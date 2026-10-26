@@ -17,9 +17,9 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	sdk "github.com/eshu-hq/eshu/sdk/go/collector"
-	"github.com/eshu-hq/eshu/sdk/go/collector/conformance"
-	"github.com/eshu-hq/eshu/sdk/go/factschema/fixturepack"
+	sdk "github.com/eshu-hq/eshu-sdk/collector"
+	"github.com/eshu-hq/eshu-sdk/collector/conformance"
+	"github.com/eshu-hq/eshu-sdk/factschema/fixturepack"
 )
 
 const (

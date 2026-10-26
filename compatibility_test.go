@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	sdk "github.com/eshu-hq/eshu/sdk/go/collector"
-	"github.com/eshu-hq/eshu/sdk/go/collector/conformance"
+	sdk "github.com/eshu-hq/eshu-sdk/collector"
+	"github.com/eshu-hq/eshu-sdk/collector/conformance"
 )
 
 // supportedCoreRange is the manifest compatibleCore this scaffold pins,

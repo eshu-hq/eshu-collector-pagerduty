@@ -4,7 +4,7 @@
 package pagerduty
 
 import (
-	sdk "github.com/eshu-hq/eshu/sdk/go/collector"
+	sdk "github.com/eshu-hq/eshu-sdk/collector"
 )
 
 // BuildFacts converts one incident collection and one optional configuration

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	incidentv1 "github.com/eshu-hq/eshu/sdk/go/factschema/incident/v1"
+	incidentv1 "github.com/eshu-hq/eshu-sdk/factschema/incident/v1"
 )
 
 // mergeContractPayload adds the typed-contract encoding of a payload to the

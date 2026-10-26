@@ -4,7 +4,7 @@
 package collector
 
 import (
-	sdk "github.com/eshu-hq/eshu/sdk/go/collector"
+	sdk "github.com/eshu-hq/eshu-sdk/collector"
 
 	"github.com/eshu-hq/eshu-collector-pagerduty/internal/pagerduty"
 )

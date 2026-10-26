@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	sdk "github.com/eshu-hq/eshu/sdk/go/collector"
+	sdk "github.com/eshu-hq/eshu-sdk/collector"
 
 	collector "github.com/eshu-hq/eshu-collector-pagerduty"
 )
