@@ -1,0 +1,14 @@
+README.md
+  h_78a442cba0b3e6 71
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "aec0ac3b1cc1e6cca92e09f3434bb76a6d372c2d",
+  "prompts": {},
+  "humans": {
+    "h_78a442cba0b3e6": {
+      "author": "Allen Sanabria <asanabria6910@gmail.com>"
+    }
+  }
+}
