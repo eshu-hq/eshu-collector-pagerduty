@@ -1,0 +1,18 @@
+manifest.yaml
+  h_78a442cba0b3e6 7
+README.md
+  h_78a442cba0b3e6 71
+grant.example.json
+  h_78a442cba0b3e6 2-7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "63fc8c8e5ec5c898b8efeab91f55027d6a20da2e",
+  "prompts": {},
+  "humans": {
+    "h_78a442cba0b3e6": {
+      "author": "Allen Sanabria <asanabria6910@gmail.com>"
+    }
+  }
+}
