@@ -10,7 +10,7 @@ import (
 	"io"
 	"strings"
 
-	sdk "github.com/eshu-hq/eshu/sdk/go/collector"
+	sdk "github.com/eshu-hq/eshu-sdk/collector"
 )
 
 // maxRequestBytes bounds the Request document read from standard input. The

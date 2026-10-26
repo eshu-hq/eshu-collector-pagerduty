@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	sdk "github.com/eshu-hq/eshu/sdk/go/collector"
-	"github.com/eshu-hq/eshu/sdk/go/factschema"
-	incidentv1 "github.com/eshu-hq/eshu/sdk/go/factschema/incident/v1"
+	sdk "github.com/eshu-hq/eshu-sdk/collector"
+	"github.com/eshu-hq/eshu-sdk/factschema"
+	incidentv1 "github.com/eshu-hq/eshu-sdk/factschema/incident/v1"
 
 	"github.com/eshu-hq/eshu-collector-pagerduty/internal/stableid"
 )

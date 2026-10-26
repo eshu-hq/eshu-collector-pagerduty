@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	sdk "github.com/eshu-hq/eshu/sdk/go/collector"
+	sdk "github.com/eshu-hq/eshu-sdk/collector"
 )
 
 const leakBody = `{"error":{"message":"LEAK-MARKER token=SYNTHETIC-API-TOKEN-0001 secret"}}`

@@ -23,8 +23,8 @@ func TestImportBoundaryRejectsCoreAndCrossCollectorImports(t *testing.T) {
 
 	allowedPrefixes := []string{
 		modulePath(t),
-		"github.com/eshu-hq/eshu/sdk/go/collector",
-		"github.com/eshu-hq/eshu/sdk/go/factschema",
+		"github.com/eshu-hq/eshu-sdk/collector",
+		"github.com/eshu-hq/eshu-sdk/factschema",
 		"gopkg.in/yaml.v3",
 	}
 	violations := []string{}
@@ -83,7 +83,7 @@ func TestImportBoundaryRejectsCoreAndCrossCollectorImports(t *testing.T) {
 // TestGoModRequiresOnlyThePublishedSDK keeps a forbidden dependency from
 // hiding behind an unused import: go.mod must not require, replace, or point
 // at any github.com/eshu-hq/ module other than the published SDK modules under
-// github.com/eshu-hq/eshu/sdk/go and this repository's own path. That rejects
+// github.com/eshu-hq/eshu-sdk/ and this repository's own path. That rejects
 // the Eshu core module, another collector's module, and a local path replace.
 func TestGoModRequiresOnlyThePublishedSDK(t *testing.T) {
 	t.Parallel()
@@ -115,7 +115,7 @@ func TestForbiddenEshuModulesDetectsEveryForm(t *testing.T) {
 		want  []string
 	}{
 		"clean": {
-			goMod: header + "require (\n\tgithub.com/eshu-hq/eshu/sdk/go/collector v0.2.0\n\tgithub.com/eshu-hq/eshu/sdk/go/factschema v0.2.0\n\tgopkg.in/yaml.v3 v3.0.1\n)\n",
+			goMod: header + "require (\n\tgithub.com/eshu-hq/eshu-sdk/collector v0.2.0\n\tgithub.com/eshu-hq/eshu-sdk/factschema v0.2.0\n\tgopkg.in/yaml.v3 v3.0.1\n)\n",
 		},
 		"comment that names another collector": {
 			goMod: header + "// Do not require " + jira + ".\nrequire gopkg.in/yaml.v3 v3.0.1 // not " + jira + "\n",
@@ -161,7 +161,7 @@ func TestForbiddenEshuModulesDetectsEveryForm(t *testing.T) {
 			want:  []string{core},
 		},
 		"SDK replaced by another collector": {
-			goMod: header + "replace github.com/eshu-hq/eshu/sdk/go/collector => " + jira + " v0.1.0\n",
+			goMod: header + "replace github.com/eshu-hq/eshu-sdk/collector => " + jira + " v0.1.0\n",
 			want:  []string{jira},
 		},
 		"local path replace": {
@@ -219,14 +219,14 @@ func isStandardOrRelative(importPath string) bool {
 // forbiddenEshuModules returns every module path or local path in goMod that
 // a standalone collector must not depend on: any github.com/eshu-hq/ path other
 // than this module (self) and the published SDK modules under
-// github.com/eshu-hq/eshu/sdk/go/, and the target of a replace that points at a
+// github.com/eshu-hq/eshu-sdk/, and the target of a replace that points at a
 // local directory. It scans each non-comment field, so a require in a block, a
 // single-line require, an indirect require, a quoted path, and a replace
 // target are all caught.
 func forbiddenEshuModules(goMod, self string) []string {
 	const (
 		org = "github.com/eshu-hq/"
-		sdk = "github.com/eshu-hq/eshu/sdk/go/"
+		sdk = "github.com/eshu-hq/eshu-sdk/"
 	)
 	var found []string
 	for _, line := range strings.Split(goMod, "\n") {

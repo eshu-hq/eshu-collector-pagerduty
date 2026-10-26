@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"testing"
 
-	sdk "github.com/eshu-hq/eshu/sdk/go/collector"
+	sdk "github.com/eshu-hq/eshu-sdk/collector"
 )
 
 // TestManifestMatchesTheCodeContract proves manifest.yaml and Contract() name

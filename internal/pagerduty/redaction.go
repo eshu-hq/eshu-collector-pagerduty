@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"strings"
 
-	sdk "github.com/eshu-hq/eshu/sdk/go/collector"
+	sdk "github.com/eshu-hq/eshu-sdk/collector"
 )
 
 // safeSourceURI returns raw without userinfo, fragment, or sensitive query
