@@ -1,0 +1,20 @@
+config.go
+  h_78a442cba0b3e6 84-99,177-181,211-212,217
+config_test.go
+  h_78a442cba0b3e6 163-187
+grant.example.json
+  h_78a442cba0b3e6 2-7
+manifest.yaml
+  h_78a442cba0b3e6 7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5b7c1f53c8f82b7fd50339ff3960ad187e40e179",
+  "prompts": {},
+  "humans": {
+    "h_78a442cba0b3e6": {
+      "author": "Allen Sanabria <asanabria6910@gmail.com>"
+    }
+  }
+}
