@@ -1,0 +1,56 @@
+boundary_test.go
+  h_78a442cba0b3e6 26-27,86,118,164,222,229
+cmd/collector/main_test.go
+  h_78a442cba0b3e6 18
+collector.go
+  h_78a442cba0b3e6 7
+compatibility_test.go
+  h_78a442cba0b3e6 10-11
+go.mod
+  h_78a442cba0b3e6 6-7
+go.sum
+  h_78a442cba0b3e6 5-8
+handler.go
+  h_78a442cba0b3e6 13
+handler_failure_test.go
+  h_78a442cba0b3e6 16
+handler_partial_test.go
+  h_78a442cba0b3e6 10-11
+handler_test.go
+  h_78a442cba0b3e6 16
+internal/pagerduty/assemble.go
+  h_78a442cba0b3e6 7
+internal/pagerduty/encode_helpers.go
+  h_78a442cba0b3e6 12
+internal/pagerduty/facts.go
+  h_78a442cba0b3e6 10-12
+internal/pagerduty/facts_config.go
+  h_78a442cba0b3e6 13-15
+internal/pagerduty/facts_test.go
+  h_78a442cba0b3e6 13
+internal/pagerduty/freshness.go
+  h_78a442cba0b3e6 10
+internal/pagerduty/redaction.go
+  h_78a442cba0b3e6 10
+manifest_contract_test.go
+  h_78a442cba0b3e6 10
+parity_test.go
+  h_78a442cba0b3e6 16
+request.go
+  h_78a442cba0b3e6 13
+result.go
+  h_78a442cba0b3e6 9
+testhelpers_test.go
+  h_78a442cba0b3e6 20-22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4ffdad0a322732afda1577d0bc04a3f093a9982d",
+  "prompts": {},
+  "humans": {
+    "h_78a442cba0b3e6": {
+      "author": "Allen Sanabria <asanabria6910@gmail.com>"
+    }
+  }
+}
