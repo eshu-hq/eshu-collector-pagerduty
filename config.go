@@ -81,6 +81,22 @@ type rawConfig struct {
 	AllowEmptySuccessor     bool     `json:"allow_empty_successor"`
 	// MaxResultBytes bounds the encoded result; zero selects the default.
 	MaxResultBytes int `json:"max_result_bytes"`
+	// Limits carries the shared host-level limits stanza the activation
+	// config block always includes. The host enforces claim budgets; the
+	// satellite consumes maxResultBytes so its own encoded-result bound
+	// matches what the operator approved. No grant material ever arrives
+	// here: core-owned-kind authorization is host-enforced at emission.
+	Limits *limitsJSON `json:"limits"`
+}
+
+// limitsJSON is the shared host-level limits stanza. Only maxResultBytes has
+// a satellite-side consumer; the rest are accepted so the verbatim envelope
+// parses and host-side enforcement stays the single owner.
+type limitsJSON struct {
+	MaxRecordsPerClaim  int `json:"maxRecordsPerClaim"`
+	MaxPayloadBytes     int `json:"maxPayloadBytes"`
+	MaxResultBytes      int `json:"maxResultBytes"`
+	ClaimTimeoutSeconds int `json:"claimTimeoutSeconds"`
 }
 
 // Config is the validated activation config for one PagerDuty account.
@@ -158,7 +174,11 @@ func (c rawConfig) validate(getenv func(string) string) (Config, error) {
 			return invalid("%s must be between 0 and %d", bound.name, bound.max)
 		}
 	}
-	if c.MaxResultBytes < 0 || c.MaxResultBytes > maxResultBytesCeiling {
+	maxResultBytes := c.MaxResultBytes
+	if maxResultBytes == 0 && c.Limits != nil {
+		maxResultBytes = c.Limits.MaxResultBytes
+	}
+	if maxResultBytes < 0 || maxResultBytes > maxResultBytesCeiling {
 		return invalid("max_result_bytes must be between 0 and %d", maxResultBytesCeiling)
 	}
 	lookback, err := parseLookback(c.IncidentLookback)
@@ -188,14 +208,13 @@ func (c rawConfig) validate(getenv func(string) string) (Config, error) {
 	if target.ConfigValidationEnabled && target.ConfigResourceLimit == 0 {
 		target.ConfigResourceLimit = 100
 	}
-	maxResult := c.MaxResultBytes
-	if maxResult == 0 {
-		maxResult = DefaultMaxResultBytes
+	if maxResultBytes == 0 {
+		maxResultBytes = DefaultMaxResultBytes
 	}
 	return Config{
 		Target:         target,
 		Token:          token,
-		MaxResultBytes: maxResult,
+		MaxResultBytes: maxResultBytes,
 	}, nil
 }
 

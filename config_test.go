@@ -160,3 +160,28 @@ func TestParseLookbackNonPositiveSelectsDefault(t *testing.T) {
 		}
 	}
 }
+
+// TestParseConfigAcceptsLiveActivationEnvelope proves the host contract: the
+// activation config block arrives verbatim, including the shared host-level
+// limits stanza, with no grant material. This is the literal ops-qa
+// activation (eshu-hq/eshu#8863); rejecting it fails production closed.
+func TestParseConfigAcceptsLiveActivationEnvelope(t *testing.T) {
+	t.Parallel()
+
+	env := envWith(map[string]string{"PAGERDUTY_API_TOKEN": "secret-value"})
+	got, err := ParseConfig(map[string]any{
+		"provider": "pagerduty", "scope_id": "pagerduty:account:boats", "account_id": "boats",
+		"token_env": "PAGERDUTY_API_TOKEN", "incident_lookback": "168h",
+		"incident_limit": 50, "log_entry_limit": 50, "change_event_limit": 50,
+		"limits": map[string]any{
+			"maxRecordsPerClaim": 50000, "maxPayloadBytes": 1048576,
+			"maxResultBytes": 3500000, "claimTimeoutSeconds": 300,
+		},
+	}, env)
+	if err != nil {
+		t.Fatalf("ParseConfig(live envelope) error = %v", err)
+	}
+	if got.MaxResultBytes != 3500000 {
+		t.Fatalf("MaxResultBytes = %d, want 3500000 from the limits stanza", got.MaxResultBytes)
+	}
+}
