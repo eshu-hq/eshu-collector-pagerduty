@@ -68,7 +68,7 @@ The component lifecycle, using the `eshu` CLI against a component home:
 
 ```sh
 eshu component grant dev.eshu.collector.pagerduty --component-home "$HOME_DIR" \
-  --version 0.1.1 --kind incident.record --schema-version 1.0.0 \
+  --version 0.1.2 --kind incident.record --schema-version 1.0.0 \
   --scope pagerduty --expires-in 8760h        # repeat for each kind in grant.example.json
 eshu component install manifest.yaml --component-home "$HOME_DIR" \
   --trust-mode allowlist --allow-id dev.eshu.collector.pagerduty --allow-publisher eshu-hq
