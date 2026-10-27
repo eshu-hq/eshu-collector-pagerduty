@@ -1,0 +1,18 @@
+internal/pagerduty/client_test.go
+  h_78a442cba0b3e6 8-9,17-18,245-264
+internal/pagerduty/fanout.go
+  h_78a442cba0b3e6 36-39,370-372
+internal/pagerduty/fanout_test.go
+  h_78a442cba0b3e6 17-18,316-330
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "44a2af22e594bde0bdf719a798085d40d9760dd0",
+  "prompts": {},
+  "humans": {
+    "h_78a442cba0b3e6": {
+      "author": "Allen Sanabria <asanabria6910@gmail.com>"
+    }
+  }
+}
