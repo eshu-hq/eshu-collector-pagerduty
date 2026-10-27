@@ -5,6 +5,8 @@ package pagerduty
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -12,6 +14,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/eshu-hq/eshu-collector-pagerduty/internal/httpx"
 )
 
 // route answers one path (any query) with a status and JSON body.
@@ -238,6 +242,26 @@ func TestCollectIncidentEvidenceChildTruncationAndDegradation(t *testing.T) {
 			t.Fatalf("warnings = %v, want %v", got, want)
 		}
 	})
+	// A non-retryable log-entry failure still fails the claim (fail-closed):
+	// the parallel fan-out must not degrade a 4xx log read into a warning.
+	// Regression pin for the fatal/degrade fork in readChildPages.
+	for _, status := range []int{http.StatusBadRequest, http.StatusForbidden} {
+		t.Run(fmt.Sprintf("log entries %d fails the claim", status), func(t *testing.T) {
+			t.Parallel()
+
+			api := newStubAPI(t, map[string]route{
+				"/incidents":                          {body: `{"more":false,"incidents":[{"id":"PA"},{"id":"PB"}]}`},
+				"/incidents/PA/log_entries":           {status: status, body: `{}`},
+				"/incidents/PB/log_entries":           {body: `{"more":false,"log_entries":[]}`},
+				"/incidents/PB/related_change_events": {body: `{"more":false,"change_events":[]}`},
+			})
+			_, err := newTestClient(t, api).CollectIncidentEvidence(context.Background(), TargetConfig{}, testWindow)
+			var pdErr httpx.HTTPError
+			if !errors.As(err, &pdErr) || pdErr.StatusCode != status {
+				t.Fatalf("CollectIncidentEvidence() error = %v, want HTTPError %d", err, status)
+			}
+		})
+	}
 }
 
 // TestCollectIncidentEvidenceNeverSpinsOnAMalformedMoreSignal proves a

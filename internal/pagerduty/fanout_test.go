@@ -14,6 +14,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/eshu-hq/eshu-collector-pagerduty/internal/httpx"
 )
 
 // fanoutStub serves paginated incident lists plus per-incident children with
@@ -308,6 +310,21 @@ func TestRequestLimiterTakeHonorsCancellation(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("take did not return after cancellation")
+	}
+}
+
+// TestChildRetryWaitCapsPathologicalGuidance proves a Retry-After far past
+// any sane budget is capped instead of stalling a worker.
+func TestChildRetryWaitCapsPathologicalGuidance(t *testing.T) {
+	t.Parallel()
+
+	err := httpx.HTTPError{Provider: "pagerduty", StatusCode: http.StatusTooManyRequests, RetryAfter: time.Hour}
+	wait, ok := childRetryWait(context.Background(), err)
+	if !ok {
+		t.Fatal("childRetryWait() ok = false, want a capped wait")
+	}
+	if wait != maxChildRetryWait {
+		t.Fatalf("wait = %v, want the %v cap", wait, maxChildRetryWait)
 	}
 }
 

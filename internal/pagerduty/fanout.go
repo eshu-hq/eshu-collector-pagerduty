@@ -33,6 +33,10 @@ const (
 	// host kills the claim; the collected remainder ships as partial with
 	// a deadline_budget warning instead of discarding everything.
 	fanoutBudgetFraction = 0.8
+	// maxChildRetryWait caps a provider Retry-After wait so a pathological
+	// guidance value cannot stall a worker past any sane budget. The remaining
+	// claim-deadline budget binds tighter whenever a deadline exists.
+	maxChildRetryWait = 60 * time.Second
 )
 
 // requestLimiter is a mutex-guarded token bucket pacing outbound provider
@@ -362,6 +366,9 @@ func childRetryWait(ctx context.Context, err error) (time.Duration, bool) {
 	var pdErr httpx.HTTPError
 	if errors.As(err, &pdErr) {
 		wait = pdErr.RetryAfterDelay()
+	}
+	if wait > maxChildRetryWait {
+		wait = maxChildRetryWait
 	}
 	if deadline, ok := ctx.Deadline(); ok {
 		if remaining := time.Until(deadline); wait >= remaining {
