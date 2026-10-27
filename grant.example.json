@@ -1,8 +1,8 @@
 [
-  {"producer_id": "dev.eshu.collector.pagerduty", "version": "0.1.3", "kind": "incident.record", "schema_versions": ["1.0.0"], "scope": "pagerduty", "expires_at": "2027-09-01T00:00:00Z", "revoked": false},
-  {"producer_id": "dev.eshu.collector.pagerduty", "version": "0.1.3", "kind": "incident.lifecycle_event", "schema_versions": ["1.0.0"], "scope": "pagerduty", "expires_at": "2027-09-01T00:00:00Z", "revoked": false},
-  {"producer_id": "dev.eshu.collector.pagerduty", "version": "0.1.3", "kind": "change.record", "schema_versions": ["1.0.0"], "scope": "pagerduty", "expires_at": "2027-09-01T00:00:00Z", "revoked": false},
-  {"producer_id": "dev.eshu.collector.pagerduty", "version": "0.1.3", "kind": "incident_routing.observed_pagerduty_service", "schema_versions": ["1.0.0"], "scope": "pagerduty", "expires_at": "2027-09-01T00:00:00Z", "revoked": false},
-  {"producer_id": "dev.eshu.collector.pagerduty", "version": "0.1.3", "kind": "incident_routing.observed_pagerduty_integration", "schema_versions": ["1.0.0"], "scope": "pagerduty", "expires_at": "2027-09-01T00:00:00Z", "revoked": false},
-  {"producer_id": "dev.eshu.collector.pagerduty", "version": "0.1.3", "kind": "incident_routing.coverage_warning", "schema_versions": ["1.0.0"], "scope": "pagerduty", "expires_at": "2027-09-01T00:00:00Z", "revoked": false}
+  {"producer_id": "dev.eshu.collector.pagerduty", "version": "0.1.4", "kind": "incident.record", "schema_versions": ["1.0.0"], "scope": "pagerduty", "expires_at": "2027-09-01T00:00:00Z", "revoked": false},
+  {"producer_id": "dev.eshu.collector.pagerduty", "version": "0.1.4", "kind": "incident.lifecycle_event", "schema_versions": ["1.0.0"], "scope": "pagerduty", "expires_at": "2027-09-01T00:00:00Z", "revoked": false},
+  {"producer_id": "dev.eshu.collector.pagerduty", "version": "0.1.4", "kind": "change.record", "schema_versions": ["1.0.0"], "scope": "pagerduty", "expires_at": "2027-09-01T00:00:00Z", "revoked": false},
+  {"producer_id": "dev.eshu.collector.pagerduty", "version": "0.1.4", "kind": "incident_routing.observed_pagerduty_service", "schema_versions": ["1.0.0"], "scope": "pagerduty", "expires_at": "2027-09-01T00:00:00Z", "revoked": false},
+  {"producer_id": "dev.eshu.collector.pagerduty", "version": "0.1.4", "kind": "incident_routing.observed_pagerduty_integration", "schema_versions": ["1.0.0"], "scope": "pagerduty", "expires_at": "2027-09-01T00:00:00Z", "revoked": false},
+  {"producer_id": "dev.eshu.collector.pagerduty", "version": "0.1.4", "kind": "incident_routing.coverage_warning", "schema_versions": ["1.0.0"], "scope": "pagerduty", "expires_at": "2027-09-01T00:00:00Z", "revoked": false}
 ]
