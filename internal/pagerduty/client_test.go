@@ -6,6 +6,7 @@ package pagerduty
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -189,22 +190,40 @@ func TestCollectIncidentEvidenceChildTruncationAndDegradation(t *testing.T) {
 			t.Fatal("Truncated = false, want true")
 		}
 	})
+	// A retryable change-event failure retries once and then degrades to a
+	// warning for that incident instead of failing the whole claim
+	// (arbiter ruling on eshu-hq/eshu#8863: the fan-out must survive provider
+	// pressure). 429 warns rate_limited; other retryable statuses warn
+	// partial.
 	for _, test := range []struct {
 		name   string
 		status int
-	}{{"rate limited", 429}, {"server error", 500}, {"request timeout", 408}} {
-		t.Run("change events "+test.name+" fails the claim", func(t *testing.T) {
+		reason string
+	}{
+		{"rate limited", 429, ConfigWarningRateLimited},
+		{"server error", 500, ConfigWarningPartial},
+		{"request timeout", 408, ConfigWarningPartial},
+	} {
+		t.Run("change events "+test.name+" degrades to a warning", func(t *testing.T) {
 			t.Parallel()
 
 			api := newStubAPI(t, map[string]route{
 				"/incidents":                          {body: incidents},
 				"/incidents/PA/log_entries":           {body: `{"more":false,"log_entries":[]}`},
 				"/incidents/PA/related_change_events": {status: test.status, body: `{}`},
+				"/incidents/PB/log_entries":           {body: `{"more":false,"log_entries":[]}`},
+				"/incidents/PB/related_change_events": {body: `{"more":false,"change_events":[]}`},
 			})
-			_, err := newTestClient(t, api).CollectIncidentEvidence(context.Background(), TargetConfig{}, testWindow)
-			var httpErr httpx.HTTPError
-			if !errors.As(err, &httpErr) || httpErr.StatusCode != test.status {
-				t.Fatalf("error = %v, want HTTPError %d", err, test.status)
+			result, err := newTestClient(t, api).CollectIncidentEvidence(context.Background(), TargetConfig{}, testWindow)
+			if err != nil {
+				t.Fatalf("CollectIncidentEvidence() error = %v, want a retry-then-warn degradation", err)
+			}
+			want := []string{"related_change_event/PA/" + test.reason}
+			if got := warningKeys(result.Warnings); !reflect.DeepEqual(got, want) {
+				t.Fatalf("warnings = %v, want %v", got, want)
+			}
+			if result.Truncated {
+				t.Fatalf("truncated = true, want false: a degraded child is a warning, not truncation")
 			}
 		})
 	}
@@ -223,6 +242,26 @@ func TestCollectIncidentEvidenceChildTruncationAndDegradation(t *testing.T) {
 			t.Fatalf("warnings = %v, want %v", got, want)
 		}
 	})
+	// A non-retryable log-entry failure still fails the claim (fail-closed):
+	// the parallel fan-out must not degrade a 4xx log read into a warning.
+	// Regression pin for the fatal/degrade fork in readChildPages.
+	for _, status := range []int{http.StatusBadRequest, http.StatusForbidden} {
+		t.Run(fmt.Sprintf("log entries %d fails the claim", status), func(t *testing.T) {
+			t.Parallel()
+
+			api := newStubAPI(t, map[string]route{
+				"/incidents":                          {body: `{"more":false,"incidents":[{"id":"PA"},{"id":"PB"}]}`},
+				"/incidents/PA/log_entries":           {status: status, body: `{}`},
+				"/incidents/PB/log_entries":           {body: `{"more":false,"log_entries":[]}`},
+				"/incidents/PB/related_change_events": {body: `{"more":false,"change_events":[]}`},
+			})
+			_, err := newTestClient(t, api).CollectIncidentEvidence(context.Background(), TargetConfig{}, testWindow)
+			var pdErr httpx.HTTPError
+			if !errors.As(err, &pdErr) || pdErr.StatusCode != status {
+				t.Fatalf("CollectIncidentEvidence() error = %v, want HTTPError %d", err, status)
+			}
+		})
+	}
 }
 
 // TestCollectIncidentEvidenceNeverSpinsOnAMalformedMoreSignal proves a

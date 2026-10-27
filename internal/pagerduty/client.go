@@ -45,6 +45,10 @@ type Client struct {
 	baseURL *url.URL
 	token   string
 	client  httpx.HTTPDoer
+	// limiter paces every PagerDuty call at the shared request rate. Nil
+	// disables pacing (unit tests cover logic; TestRateLimiter* covers the
+	// bucket, and fanout tests opt out explicitly).
+	limiter *requestLimiter
 }
 
 // NewClient validates configuration and returns a PagerDuty REST client.
@@ -66,7 +70,12 @@ func NewClient(config ClientConfig) (*Client, error) {
 	if client == nil {
 		client = httpx.DefaultHTTPClient(0)
 	}
-	return &Client{baseURL: baseURL, token: token, client: client}, nil
+	return &Client{
+		baseURL: baseURL,
+		token:   token,
+		client:  client,
+		limiter: newRequestLimiter(fanoutRequestsPerSecond, fanoutRateBurst),
+	}, nil
 }
 
 func isLoopbackHost(host string) bool {
@@ -117,65 +126,24 @@ func (c *Client) CollectIncidentEvidence(
 			Reason:        ConfigWarningUnsupported,
 		})
 	}
-	for _, incident := range incidents {
-		if !safePathID.MatchString(incident.ID) {
-			result.Warnings = append(result.Warnings,
-				ConfigWarning{ResourceClass: ConfigResourceClassLogEntry, Reason: ConfigWarningUnsupported},
-				ConfigWarning{ResourceClass: ConfigResourceClassRelatedChangeEvent, Reason: ConfigWarningUnsupported},
-			)
-			continue
-		}
-		logs, logPages, logTruncated, err := c.listLogEntries(ctx, incident.ID, target.LogEntryLimit, bounds)
-		if err != nil {
-			return CollectionResult{}, err
-		}
-		logs, droppedLogs := keepIdentified(logs, func(e LifecycleEvent) string { return e.ID })
-		if droppedLogs {
-			result.Warnings = append(result.Warnings, ConfigWarning{
-				ResourceClass: ConfigResourceClassLogEntry,
-				ResourceID:    incident.ID,
-				Reason:        ConfigWarningUnsupported,
-			})
-		}
-		result.LifecycleEvents[incident.ID] = logs
-		result.PagesFetched += logPages
-		if logTruncated {
-			result.Truncated = true
-			result.Warnings = append(result.Warnings, ConfigWarning{
-				ResourceClass: ConfigResourceClassLogEntry,
-				ResourceID:    incident.ID,
-				Reason:        ConfigWarningTruncated,
-			})
-		}
-		changes, changePages, changeTruncated, err := c.listRelatedChangeEvents(ctx, incident.ID, target.ChangeEventLimit, bounds)
-		result.PagesFetched += changePages
-		if err != nil {
-			if retryableConfigError(err) {
-				return CollectionResult{}, err
-			}
-			if warning, ok := configWarningFromError(ConfigResourceClassRelatedChangeEvent, incident.ID, err); ok {
-				result.Warnings = append(result.Warnings, warning)
-				continue
-			}
-			return CollectionResult{}, err
-		}
-		changes, droppedChanges := keepIdentified(changes, func(c ChangeEvent) string { return c.ID })
-		if droppedChanges {
-			result.Warnings = append(result.Warnings, ConfigWarning{
-				ResourceClass: ConfigResourceClassRelatedChangeEvent,
-				ResourceID:    incident.ID,
-				Reason:        ConfigWarningUnsupported,
-			})
-		}
-		result.RelatedChangeEvents[incident.ID] = changes
-		if changeTruncated {
-			result.Truncated = true
-			result.Warnings = append(result.Warnings, ConfigWarning{
-				ResourceClass: ConfigResourceClassRelatedChangeEvent,
-				ResourceID:    incident.ID,
-				Reason:        ConfigWarningTruncated,
-			})
-		}
+	// The per-incident fan-out runs log-entry and change-event reads in parallel
+	// across a bounded worker pool so a full-window incident list fits the
+	// claim-deadline budget (eshu-hq/eshu#8863). Outcomes assemble in incident
+	// order, preserving the historical warning sequence. Unsafe identifiers
+	// never reach a request path; a retryable child failure degrades to a
+	// warning after one Retry-After-respecting retry, while a non-retryable
+	// log-entry failure still fails the claim.
+	children, err := c.collectChildren(ctx, target, bounds, incidents)
+	if err != nil {
+		return CollectionResult{}, err
+	}
+	result.Incidents = children.Incidents
+	result.LifecycleEvents = children.LifecycleEvents
+	result.RelatedChangeEvents = children.RelatedChangeEvents
+	result.PagesFetched += children.PagesFetched
+	result.Warnings = append(result.Warnings, children.Warnings...)
+	if children.Truncated {
+		result.Truncated = true
 	}
 	return result, nil
 }
@@ -299,6 +267,9 @@ func (c *Client) listRelatedChangeEvents(
 }
 
 func (c *Client) getJSON(ctx context.Context, path string, values url.Values, out any) error {
+	if err := c.limiter.take(ctx); err != nil {
+		return err
+	}
 	return httpx.DoJSON(ctx, httpx.JSONRequest{
 		Provider:  "pagerduty",
 		BaseURL:   c.baseURL,
