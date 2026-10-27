@@ -51,6 +51,11 @@ const (
 	ConfigWarningTruncated = "truncated"
 	// ConfigWarningRateLimited marks a resource read throttled by the provider.
 	ConfigWarningRateLimited = "rate_limited"
+	// ConfigWarningDeadlineBudget marks a per-incident fan-out that stopped
+	// starting new incidents at 80% of the claim-deadline budget. The claim
+	// ships the collected remainder as partial instead of expiring with no
+	// facts; the skipped tail is derivable from the emitted incident records.
+	ConfigWarningDeadlineBudget = "deadline_budget"
 )
 
 // EnvelopeContext carries the identity every PagerDuty fact shares.
