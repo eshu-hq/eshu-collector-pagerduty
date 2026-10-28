@@ -396,3 +396,74 @@ func TestImageLaneRunsOnGoSources(t *testing.T) {
 		t.Errorf("ci.yml go: filter lacks '**/*.go': Go sources would not select the Go lanes")
 	}
 }
+
+// TestDependabotConfigSelectsWorkflowLanes proves .github/dependabot.yml is
+// workflow-class: no test opens it (rg finds no reader outside .github), so
+// it is not fixtures-class, and the misc catch-all negates **/*.yml, so
+// without this entry a Dependabot-config PR would run no lane at all. CI
+// configuration must prove the lanes still work, like a workflow change.
+func TestDependabotConfigSelectsWorkflowLanes(t *testing.T) {
+	t.Parallel()
+
+	raw, err := os.ReadFile(".github/workflows/ci.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(raw)
+	start := strings.Index(text, "\n            workflow:\n")
+	if start < 0 {
+		t.Fatal("ci.yml changes job has no workflow: filter")
+	}
+	rest := text[start:]
+	end := strings.Index(rest, "\n            misc:")
+	if end < 0 {
+		t.Fatal("ci.yml changes job has no misc: filter after workflow:")
+	}
+	if !strings.Contains(rest[:end], "'.github/dependabot.yml'") {
+		t.Errorf("ci.yml workflow: filter lacks '.github/dependabot.yml': a Dependabot-config PR would run no lane")
+	}
+}
+
+// TestOrgLintSetMatchesContract proves .golangci.yml carries the org lint
+// set from epic #9 (govet, staticcheck, ineffassign, unused, errcheck;
+// formatter gofumpt) with `default: none`, so a vendor default can never
+// silently add a linter the org has not signed off on. `gosimple` stays out
+// of enable on purpose: golangci-lint v2 folded its checks into staticcheck
+// and v2.12.2 rejects the name as unknown; the config must record that
+// rationale so a future sweep of the epic text does not re-add it.
+func TestOrgLintSetMatchesContract(t *testing.T) {
+	t.Parallel()
+
+	raw, err := os.ReadFile(".golangci.yml")
+	if err != nil {
+		t.Fatalf("os.ReadFile(.golangci.yml) error = %v", err)
+	}
+	var config struct {
+		Linters struct {
+			Default string   `yaml:"default"`
+			Enable  []string `yaml:"enable"`
+		} `yaml:"linters"`
+		Formatters struct {
+			Enable []string `yaml:"enable"`
+		} `yaml:"formatters"`
+	}
+	if err := yaml.Unmarshal(raw, &config); err != nil {
+		t.Fatalf("yaml.Unmarshal(.golangci.yml) error = %v", err)
+	}
+	if config.Linters.Default != "none" {
+		t.Errorf("linters.default = %q, want %q so vendor defaults stay off", config.Linters.Default, "none")
+	}
+	want := []string{"govet", "staticcheck", "ineffassign", "unused", "errcheck"}
+	enabled := slices.Clone(config.Linters.Enable)
+	sort.Strings(enabled)
+	sort.Strings(want)
+	if !slices.Equal(enabled, want) {
+		t.Errorf("linters.enable = %v, want %v (the org set from epic #9; gosimple stays out, see below)", config.Linters.Enable, want)
+	}
+	if !slices.Contains(config.Formatters.Enable, "gofumpt") {
+		t.Errorf("formatters.enable = %v, want it to contain gofumpt", config.Formatters.Enable)
+	}
+	if !strings.Contains(string(raw), "gosimple") {
+		t.Errorf(".golangci.yml records no gosimple rationale: a future sweep of the epic text would re-add a linter v2.12.2 rejects as unknown")
+	}
+}

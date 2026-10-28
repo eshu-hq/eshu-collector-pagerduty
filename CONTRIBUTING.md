@@ -17,15 +17,17 @@ Need a single lane? `make lint`, `make test`, or `make race` run on their own.
 
 The `race` lane uploads a coverprofile artifact, posts per-package totals to
 the job summary, and fails below `COVERAGE_FLOOR` (percent of statements,
-same default in the `Makefile`). Three numbers matter: the measured baseline
-is 87.3% (1162/1331 statements, epic #9, 2026-10-27, re-measured 87.2%
-and 87.3% across two runs at this HEAD); CI observed 87.2% on dispatch run
-40618903647 (amd64 vs arm64-laptop plus run-to-run noise); the floor holds
-at 87.1% as a stability margin, so that noise never goes red — had the
-floor been set at 87.3, the CI run at 87.2 would have failed. The floor may only rise as tests land — never lower it,
+same default in the `Makefile`). Three numbers matter: the measured total
+is 90.9–91.1% (1210–1213/1331 statements, epic #9, 2026-10-28, across one
+plain and three `-race` runs; the band is a context-cancellation branch in
+`fetchIncidentChildren` that only wins its race under `-race` slowdown,
+plus the usual amd64-vs-arm64 platform noise); the floor holds
+at 90.8% as a stability margin, so that noise never goes red — the same
+margin rule that kept the earlier 87.1% floor green when CI read 87.2%
+against a 87.3% laptop measurement. The floor may only rise as tests land — never lower it,
 exclude packages silently, or delete assertions to move it. Generated code
-may be excluded only by an explicit, reviewed list. The finish line is 90%
-(about 36 more covered statements at today's size, tracked in #9).
+may be excluded only by an explicit, reviewed list. The 90% finish line from
+#9 is met: the floor (90.8%) stands above it.
 
 ## Lint and size rules
 
@@ -39,7 +41,7 @@ the `lint` lane); split before approaching the limit.
 `.github/workflows/ci.yml` picks lanes by changed paths: docs-only PRs run
 no lane, Go changes run `lint`/`test`/`race`/`boundary`/`image` (the Dockerfile builds the binary from them) plus `gosec`,
 fixture files tests read run `test`, dependency changes add `govulncheck`
-(`gosec` already runs), workflow changes run actionlint inside `lint` plus
+(`gosec` already runs), workflow files and `.github/dependabot.yml` run actionlint inside `lint` plus
 `lint`/`test`/`race`/`boundary` plus `gosec`, shell scripts run `shell`,
 Dockerfile changes run `image`, and anything unclassified (the `misc`
 catch-all, e.g. `Makefile`) runs `lint`/`test`/`race`/`boundary`.

@@ -7,7 +7,7 @@
 
 GOLANGCI_VERSION ?= 2.12.2
 ACTIONLINT_VERSION ?= 1.7.12
-COVERAGE_FLOOR ?= 87.1
+COVERAGE_FLOOR ?= 90.8
 
 GOLANGCI := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v$(GOLANGCI_VERSION)
 ACTIONLINT := go run github.com/rhysd/actionlint/cmd/actionlint@v$(ACTIONLINT_VERSION)
