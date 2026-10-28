@@ -55,7 +55,7 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		return 2
 	}
 	if flags.NArg() > 0 {
-		fmt.Fprintf(stderr, "collector: unexpected argument %q\n", flags.Arg(0))
+		_, _ = fmt.Fprintf(stderr, "collector: unexpected argument %q\n", flags.Arg(0))
 		return 2
 	}
 	return serve(ctx, stdin, stdout, stderr, d)
@@ -65,7 +65,7 @@ func serve(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, d dep
 	monitor := collector.NewMonitor()
 	request, err := collector.DecodeRequest(stdin)
 	if err != nil {
-		fmt.Fprintf(stderr, "collector: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "collector: %v\n", err)
 		return 1
 	}
 	signalCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
@@ -85,7 +85,7 @@ func serve(ctx context.Context, stdin io.Reader, stdout, stderr io.Writer, d dep
 	logSummary(stderr, monitor, summary)
 
 	if err := json.NewEncoder(stdout).Encode(result); err != nil {
-		fmt.Fprintf(stderr, "collector: write result: %v\n", errors.Unwrap(err))
+		_, _ = fmt.Fprintf(stderr, "collector: write result: %v\n", errors.Unwrap(err))
 		return 1
 	}
 	return 0
@@ -100,5 +100,5 @@ func logSummary(stderr io.Writer, monitor *collector.Monitor, summary collector.
 	if err != nil {
 		return
 	}
-	fmt.Fprintf(stderr, "collector health: %s\n", line)
+	_, _ = fmt.Fprintf(stderr, "collector health: %s\n", line)
 }

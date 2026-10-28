@@ -10,7 +10,8 @@
 #
 # Both base images are pinned by digest. Re-resolve them (docker buildx
 # imagetools inspect <ref>) when bumping either base.
-FROM golang:1.26.5-alpine@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2 AS build
+# Base digests resolved 2026-10-28; re-pin both when bumping either base.
+FROM golang:1.26.10-alpine@sha256:a2012b4a1d1f9f7e9f44e0d39b805a901e856b1dd80b4e6ee4338db547050308 AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download

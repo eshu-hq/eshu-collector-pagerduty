@@ -21,7 +21,7 @@ const (
 	FailureClassConfigInvalid = "config_invalid"
 	// FailureClassCredentialMissing marks a token_env name that resolved no
 	// credential in the process environment.
-	FailureClassCredentialMissing = "credential_missing"
+	FailureClassCredentialMissing = "credential_missing" // #nosec G101 -- failure-class identifier for a missing token_env credential, not a credential value
 	// FailureClassUnsupportedOption marks a config option this release cannot
 	// honor.
 	FailureClassUnsupportedOption = "unsupported_option"

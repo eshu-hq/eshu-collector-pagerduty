@@ -1,0 +1,21 @@
+# Dependabot for eshu-collector-pagerduty: weekly grouped updates for Go
+# modules and GitHub Actions. SDK skew between heads caused silent drift
+# before; these updates keep collector/factschema pins and actions fresh.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      go-dependencies:
+        patterns:
+          - "*"
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns:
+          - "*"
