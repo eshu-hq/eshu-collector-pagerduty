@@ -18,11 +18,11 @@ Need a single lane? `make lint`, `make test`, or `make race` run on their own.
 The `race` lane uploads a coverprofile artifact, posts per-package totals to
 the job summary, and fails below `COVERAGE_FLOOR` (percent of statements,
 same default in the `Makefile`). Three numbers matter: the measured baseline
-is 87.3% (1162/1331 statements, epic #9, 2026-10-27, re-measured 87.3% at
-this HEAD); CI observed 87.2% on dispatch run 40618903647 (amd64 vs
-arm64-laptop noise); the floor holds at 87.1% as a stability margin, so that
-noise never goes red — had the floor been set at 87.3, the CI run at 87.2
-would have failed. The floor may only rise as tests land — never lower it,
+is 87.3% (1162/1331 statements, epic #9, 2026-10-27, re-measured 87.2%
+and 87.3% across two runs at this HEAD); CI observed 87.2% on dispatch run
+40618903647 (amd64 vs arm64-laptop plus run-to-run noise); the floor holds
+at 87.1% as a stability margin, so that noise never goes red — had the
+floor been set at 87.3, the CI run at 87.2 would have failed. The floor may only rise as tests land — never lower it,
 exclude packages silently, or delete assertions to move it. Generated code
 may be excluded only by an explicit, reviewed list. The finish line is 90%
 (about 36 more covered statements at today's size, tracked in #9).
