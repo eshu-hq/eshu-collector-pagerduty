@@ -107,7 +107,7 @@ func TestReleaseWorkflowContractCatchesSeededViolations(t *testing.T) {
 		"top-level permissions removed": {"permissions:\n  contents: read\n\n# Actions", "# Actions"},
 		"top-level contents write":      {"permissions:\n  contents: read\n\n# Actions", "permissions:\n  contents: write\n\n# Actions"},
 		// Pins, secrets, platform, expressions.
-		"unpinned action": {"uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262", "uses: actions/checkout@v4"},
+		"unpinned action": {"uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", "uses: actions/checkout@v4"},
 		"other secret":    {"secrets.GITHUB_TOKEN", "secrets.DEPLOY_KEY"},
 		"arm64 platform":  {"platforms: linux/amd64", "platforms: linux/amd64,linux/arm64"},
 		"platform suffix": {"platforms: linux/amd64", "platforms: linux/amd64-extra"},
