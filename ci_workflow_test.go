@@ -368,7 +368,31 @@ func TestImageLaneRunsOnGoSources(t *testing.T) {
 	if !ok {
 		t.Fatal("ci.yml has no image job")
 	}
-	if !strings.Contains(job.If, "needs.changes.outputs.go") {
-		t.Errorf("job image if = %q, want a go clause: Go sources ship in the image", job.If)
+	if !strings.Contains(job.If, "needs.changes.outputs.go == 'true'") {
+		t.Errorf("job image if = %q, want the go selecting clause: Go sources ship in the image", job.If)
+	}
+	if strings.Contains(job.If, "needs.changes.outputs.go !=") {
+		t.Errorf("job image if = %q, want == 'true', not an inverted comparison", job.If)
+	}
+	if strings.Contains(job.If, "needs.changes.outputs.go == 'false'") {
+		t.Errorf("job image if = %q, want == 'true', not == 'false'", job.If)
+	}
+
+	raw, err := os.ReadFile(".github/workflows/ci.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(raw)
+	goIdx := strings.Index(text, "\n            go:\n")
+	if goIdx < 0 {
+		t.Fatal("ci.yml changes job has no go: filter")
+	}
+	rest := text[goIdx:]
+	end := strings.Index(rest, "\n            fixtures:")
+	if end < 0 {
+		t.Fatal("ci.yml changes job has no fixtures: filter after go:")
+	}
+	if !strings.Contains(rest[:end], "'**/*.go'") {
+		t.Errorf("ci.yml go: filter lacks '**/*.go': Go sources would not select the Go lanes")
 	}
 }
