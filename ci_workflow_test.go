@@ -396,3 +396,30 @@ func TestImageLaneRunsOnGoSources(t *testing.T) {
 		t.Errorf("ci.yml go: filter lacks '**/*.go': Go sources would not select the Go lanes")
 	}
 }
+
+// TestDependabotConfigSelectsWorkflowLanes proves .github/dependabot.yml is
+// workflow-class: no test opens it (rg finds no reader outside .github), so
+// it is not fixtures-class, and the misc catch-all negates **/*.yml, so
+// without this entry a Dependabot-config PR would run no lane at all. CI
+// configuration must prove the lanes still work, like a workflow change.
+func TestDependabotConfigSelectsWorkflowLanes(t *testing.T) {
+	t.Parallel()
+
+	raw, err := os.ReadFile(".github/workflows/ci.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(raw)
+	start := strings.Index(text, "\n            workflow:\n")
+	if start < 0 {
+		t.Fatal("ci.yml changes job has no workflow: filter")
+	}
+	rest := text[start:]
+	end := strings.Index(rest, "\n            misc:")
+	if end < 0 {
+		t.Fatal("ci.yml changes job has no misc: filter after workflow:")
+	}
+	if !strings.Contains(rest[:end], "'.github/dependabot.yml'") {
+		t.Errorf("ci.yml workflow: filter lacks '.github/dependabot.yml': a Dependabot-config PR would run no lane")
+	}
+}

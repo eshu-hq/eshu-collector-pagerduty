@@ -37,3 +37,26 @@ func TestMonitorTracksSuccessFailureAndBoundedRetry(t *testing.T) {
 		t.Fatal("the ninth queued retry must exceed the bound")
 	}
 }
+
+// TestMonitorSetResourceAndRetryQueueDecrement proves the active resource
+// bound is reported in the snapshot and that a success drains one queued
+// retry instead of only clearing the failure counters.
+func TestMonitorSetResourceAndRetryQueueDecrement(t *testing.T) {
+	t.Parallel()
+
+	monitor := NewMonitor()
+	monitor.SetResource(ResourceUse{MaxResultBytes: 1024})
+	if _, resource := monitor.Snapshot(); resource.MaxResultBytes != 1024 {
+		t.Fatalf("resource = %+v, want the bound SetResource recorded", resource)
+	}
+	if err := monitor.ObserveRetryNevertheless(); err != nil {
+		t.Fatalf("ObserveRetryNevertheless() error = %v", err)
+	}
+	if err := monitor.ObserveRetryNevertheless(); err != nil {
+		t.Fatalf("ObserveRetryNevertheless() error = %v", err)
+	}
+	monitor.ObserveSuccess("hint-2", time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC))
+	if health, _ := monitor.Snapshot(); health.RetryQueueDepth != 1 {
+		t.Fatalf("retry queue depth = %d, want one entry drained by the success", health.RetryQueueDepth)
+	}
+}

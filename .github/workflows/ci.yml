@@ -16,7 +16,8 @@
 #     *.example.*) ................... test only, unless go also matches
 #   go.mod/go.sum/.golangci.yml ....... lint, test, race, boundary, govulncheck,
 #                                      gosec
-#   .github/workflows/** ............. actionlint (in lint) plus
+#   .github/workflows/**,
+#     .github/dependabot.yml .......... actionlint (in lint) plus
 #                                      lint, test, race, boundary, gosec
 #   shell (**/*.sh) ................... shell only
 #   anything else (Makefile, .github/dependabot.yml, future files):
@@ -71,7 +72,7 @@ env:
   ACTIONLINT_VERSION: 1.7.12
   SHELLCHECK_VERSION: 0.11.0
   SHELLCHECK_SHA256: 8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198
-  COVERAGE_FLOOR: "87.1"
+  COVERAGE_FLOOR: "90.8"
 
 jobs:
   changes:
@@ -139,7 +140,12 @@ jobs:
               - 'Dockerfile'
               - '.dockerignore'
             workflow:
+              # CI configuration: workflow files plus the Dependabot config
+              # (no test reads it, so it is not fixtures-class, and the
+              # misc catch-all negates **/*.yml — without this entry a
+              # Dependabot-config PR would run no lane at all).
               - '.github/workflows/**'
+              - '.github/dependabot.yml'
             misc:
               # Fail closed per the epic: anything not classified above runs
               # lint+test+race+boundary. Docs stay negated so docs-only PRs
