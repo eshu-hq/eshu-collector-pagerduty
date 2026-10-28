@@ -1,6 +1,6 @@
 module github.com/eshu-hq/eshu-collector-pagerduty
 
-go 1.26.5
+go 1.26.10
 
 require (
 	github.com/eshu-hq/eshu-sdk/collector v0.1.0-rc.3

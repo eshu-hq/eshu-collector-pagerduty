@@ -1,0 +1,26 @@
+# Org lint set for eshu-hq collector repos, pinned to golangci-lint v2.12.2
+# (the version Eshu uses and this repo's CI installs). Linters are
+# explicitly opted in so the set is grep-able from this file;
+# `default: none` keeps a vendor default from silently adding a linter
+# the org has not signed off on. No baselines, no new-from-rev: lint
+# runs on the whole repo and existing findings are fixed under the epic.
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - govet
+    - staticcheck
+    - ineffassign
+    - unused
+    - errcheck
+
+formatters:
+  enable:
+    - gofumpt
+
+issues:
+  # The default of 50 hides backlog behind nondeterministic windows.
+  # Leave the census uncapped so the gate always reports every finding.
+  max-issues-per-linter: 0
+  max-same-issues: 0

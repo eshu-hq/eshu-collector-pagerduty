@@ -74,7 +74,7 @@ func runSeed(args []string, stdout, stderr io.Writer, d deps) int {
 		return 2
 	}
 	if flags.NArg() > 0 || *dest == "" {
-		fmt.Fprintln(stderr, "collector: seed requires --dest DIR and takes no other arguments")
+		_, _ = fmt.Fprintln(stderr, "collector: seed requires --dest DIR and takes no other arguments")
 		return 2
 	}
 	ref := *imageRef
@@ -86,27 +86,27 @@ func runSeed(args []string, stdout, stderr io.Writer, d deps) int {
 	manifest := collector.ManifestYAML()
 	if ref != "" {
 		if !imageRefPattern.MatchString(ref) {
-			fmt.Fprintln(stderr, "collector: seed: image reference must be repository@sha256:<64 lowercase hex digits>")
+			_, _ = fmt.Fprintln(stderr, "collector: seed: image reference must be repository@sha256:<64 lowercase hex digits>")
 			return 2
 		}
 		stamped, err := stampImageRef(manifest, ref)
 		if err != nil {
-			fmt.Fprintf(stderr, "collector: seed: %v\n", err)
+			_, _ = fmt.Fprintf(stderr, "collector: seed: %v\n", err)
 			return 1
 		}
 		manifest = stamped
 	}
 	exe, err := d.executable()
 	if err != nil {
-		fmt.Fprintf(stderr, "collector: locate executable: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "collector: locate executable: %v\n", err)
 		return 1
 	}
 	report, err := seed(*dest, exe, manifest)
 	if err != nil {
-		fmt.Fprintf(stderr, "collector: seed: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "collector: seed: %v\n", err)
 		return 1
 	}
-	fmt.Fprintf(stdout, "seeded %s sha256:%s changed=%t\nseeded %s sha256:%s changed=%t\n",
+	_, _ = fmt.Fprintf(stdout, "seeded %s sha256:%s changed=%t\nseeded %s sha256:%s changed=%t\n",
 		seedBinaryName, report.binarySHA, report.binaryChanged,
 		seedManifestName, report.manifestSHA, report.manifestChanged)
 	return 0
@@ -118,7 +118,7 @@ type seedReport struct {
 }
 
 func seed(dest, executablePath string, manifest []byte) (seedReport, error) {
-	if err := os.MkdirAll(dest, 0o755); err != nil {
+	if err := os.MkdirAll(dest, 0o755); err != nil { // #nosec G301 -- seed dir holds the executable init container + host execute
 		return seedReport{}, fmt.Errorf("create destination: %w", unwrapPathError(err))
 	}
 	binary, err := os.Open(executablePath) // #nosec G304 -- the caller passes this process's own executable path

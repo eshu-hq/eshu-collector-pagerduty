@@ -19,7 +19,7 @@ import (
 
 // redactionReasonCredential is the redaction reason recorded for a provider
 // key field the collector dropped.
-const redactionReasonCredential = "credential-redacted"
+const redactionReasonCredential = "credential-redacted" // #nosec G101 -- redaction-reason label for a dropped key field, not a credential value
 
 // NewObservedServiceFact converts one live PagerDuty service into an
 // incident_routing.observed_pagerduty_service fact.
