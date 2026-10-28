@@ -300,7 +300,7 @@ jobs:
 
   image:
     needs: [changes]
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.image == 'true')
+    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.image == 'true' || needs.changes.outputs.go == 'true')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
