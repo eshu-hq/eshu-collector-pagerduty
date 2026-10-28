@@ -37,7 +37,7 @@ the `lint` lane); split before approaching the limit.
 ## What CI runs on your PR
 
 `.github/workflows/ci.yml` picks lanes by changed paths: docs-only PRs run
-no lane, Go changes run `lint`/`test`/`race`/`boundary` plus `gosec`,
+no lane, Go changes run `lint`/`test`/`race`/`boundary`/`image` (the Dockerfile builds the binary from them) plus `gosec`,
 fixture files tests read run `test`, dependency changes add `govulncheck`
 (`gosec` already runs), workflow changes run actionlint inside `lint` plus
 `lint`/`test`/`race`/`boundary` plus `gosec`, shell scripts run `shell`,
