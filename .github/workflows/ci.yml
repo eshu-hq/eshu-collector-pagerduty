@@ -10,12 +10,14 @@
 # Path selection happens once, in `changes` (dorny/paths-filter). A PR only
 # pays for lanes its paths can affect:
 #   docs only (**/*.md, LICENSE) .... no lanes, ci-complete succeeds
-#   Go sources (**/*.go) ............. lint, test, race, boundary (+ coverage)
+#   Go sources (**/*.go) ............. lint, test, race, boundary (+ coverage),
+#                                      gosec
 #   fixtures (testdata/**, **/*.json|yaml|yml, manifest.yaml,
 #     *.example.*) ................... test only, unless go also matches
-#   go.mod/go.sum/.golangci.yml ....... lint, test, race, boundary, govulncheck
+#   go.mod/go.sum/.golangci.yml ....... lint, test, race, boundary, govulncheck,
+#                                      gosec
 #   .github/workflows/** ............. actionlint (in lint) plus
-#                                      lint, test, race, boundary
+#                                      lint, test, race, boundary, gosec
 #   shell (**/*.sh) ................... shell only
 #   anything else (Makefile, .github/dependabot.yml, future files):
 #     the `misc` catch-all runs lint, test, race, boundary (fail closed).
