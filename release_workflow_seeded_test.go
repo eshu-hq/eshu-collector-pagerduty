@@ -97,15 +97,15 @@ func TestReleaseWorkflowContractCatchesSeededViolations(t *testing.T) {
 		// Triggers.
 		"pull request trigger": {"on:\n  push:", "on:\n  pull_request:\n  push:"},
 		"workflow_dispatch":    {"on:\n  push:", "on:\n  workflow_dispatch:\n  push:"},
-		"branch trigger":       {"tags: [\"v*\"]", "tags: [\"v*\"]\n    branches: [main]"},
-		"wider tag glob":       {"tags: [\"v*\"]", "tags: [\"*\"]"},
+		"branch trigger":       {"      - main", "      - main\n      - dev"},
+		"wider tag glob":       {"      - \"v*\"", "      - \"*\""},
 		// Permissions.
 		"contents write":                {"contents: read\n      packages", "contents: write\n      packages"},
 		"extra permission":              {"id-token: write", "id-token: write\n      actions: write"},
 		"W5 id-token removed":           {"      id-token: write\n", ""},
 		"attestations removed":          {"      attestations: write\n", ""},
-		"top-level permissions removed": {"permissions:\n  contents: read\n\n# Actions", "# Actions"},
-		"top-level contents write":      {"permissions:\n  contents: read\n\n# Actions", "permissions:\n  contents: write\n\n# Actions"},
+		"top-level permissions removed": {"permissions:\n  contents: read\n\nconcurrency:", "concurrency:"},
+		"top-level contents write":      {"permissions:\n  contents: read\n\nconcurrency:", "permissions:\n  contents: write\n\nconcurrency:"},
 		// Pins, secrets, platform, expressions.
 		"unpinned action": {"uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", "uses: actions/checkout@v4"},
 		"other secret":    {"secrets.GITHUB_TOKEN", "secrets.DEPLOY_KEY"},
@@ -127,7 +127,7 @@ func TestReleaseWorkflowContractCatchesSeededViolations(t *testing.T) {
 			`run: cosign sign --yes "${IMAGE_REF}"`,
 			`run: cosign sign --yes "${IMAGE_REF}" && echo github.token`,
 		},
-		"latest tag": {"org.opencontainers.image.licenses=MIT", "org.opencontainers.image.licenses=MIT\n            x=ghcr.io/eshu-hq/eshu-collector-pagerduty:latest"},
+		"latest tag": {"            type=raw,value=latest", "            type=raw,value=latest\n            x=ghcr.io/eshu-hq/eshu-collector-pagerduty:latest"},
 		// Signing and attestation.
 		"no signing":             {`run: cosign sign --yes "${IMAGE_REF}"`, "run: echo skip"},
 		"W12 sign by latest":     {"IMAGE_REF: ghcr.io/eshu-hq/eshu-collector-pagerduty@${{ steps.build.outputs.digest }}\n        run: cosign sign", "IMAGE_REF: ghcr.io/eshu-hq/eshu-collector-pagerduty:v0.1.0\n        run: cosign sign"},

@@ -1,8 +1,12 @@
 # SPDX-License-Identifier: MIT
 # Copyright (c) 2025-2026 eshu-hq
 #
-# Publishes the collector image when a v* tag is pushed. It never runs on a
-# pull request or a branch push, so nothing is published before a tag exists.
+# Publishes the collector image on every push to main and on every pushed
+# version tag. Nothing runs on a pull request, and nothing here deploys.
+# A v* tag push publishes that tag after the tag-shape and manifest-version
+# guards pass; those guards run only on tag events. A push to main publishes
+# the moving main, latest, and sha-<full-sha> tags with the same provenance,
+# signature, SBOM, and attestation hardening as version-tag releases.
 # The only credential is the job's GITHUB_TOKEN. There is no deploy step: the
 # job records the digest in its summary, and a person copies that digest into
 # the activation's seed.image (see README, "Releasing").
@@ -10,10 +14,17 @@ name: release
 
 on:
   push:
-    tags: ["v*"]
+    branches:
+      - main
+    tags:
+      - "v*"
 
 permissions:
   contents: read
+
+concurrency:
+  group: image-publish-${{ github.ref }}
+  cancel-in-progress: false
 
 # Actions are pinned to commit SHAs; the comment names the release.
 jobs:
@@ -33,6 +44,7 @@ jobs:
       # The tag only reaches the shell through TAG_NAME. A tag that is not a
       # clean semantic version fails here, before any checkout or build.
       - name: Require a semantic version tag
+        if: github.ref_type == 'tag'
         run: |
           if ! printf '%s' "${TAG_NAME}" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
             echo "tag '${TAG_NAME}' is not vMAJOR.MINOR.PATCH[-prerelease]" >&2
@@ -47,6 +59,7 @@ jobs:
           persist-credentials: false
 
       - name: Require the tag to match the manifest version
+        if: github.ref_type == 'tag'
         run: |
           version="$(awk '/^  version:/ {print $2; exit}' manifest.yaml)"
           test -n "${version}"
@@ -66,6 +79,26 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Extract image metadata (tag events)
+        id: meta-tag
+        if: github.ref_type == 'tag'
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=tag
+
+      - name: Extract image metadata (main-branch pushes)
+        id: meta-branch
+        if: github.ref_type == 'branch'
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=main
+            type=raw,value=latest
+            type=sha,prefix=sha-,format=long
+
       - name: Build and push the linux/amd64 image
         id: build
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -78,12 +111,12 @@ jobs:
           sbom: false
           build-args: |
             SOURCE_DATE_EPOCH=${{ steps.epoch.outputs.epoch }}
-          tags: ghcr.io/eshu-hq/eshu-collector-pagerduty:${{ github.ref_name }}
+          tags: |
+            ${{ steps.meta-tag.outputs.tags }}
+            ${{ steps.meta-branch.outputs.tags }}
           labels: |
-            org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.version=${{ github.ref_name }}
-            org.opencontainers.image.licenses=MIT
+            ${{ steps.meta-tag.outputs.labels }}
+            ${{ steps.meta-branch.outputs.labels }}
 
       - name: Record the digest in the job summary
         env:
