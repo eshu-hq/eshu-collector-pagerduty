@@ -119,8 +119,8 @@ func stepUsing(steps []workflowStep, actionPrefix string) (workflowStep, bool) {
 }
 
 // releaseWorkflowViolations returns every way raw breaks the release
-// workflow contract. The contract bounds the workflow (it runs only on pushed
-// v* tags, holds exactly the permissions it needs, pins every action by commit
+// workflow contract. The contract bounds the workflow (it runs only on pushes
+// to main and on pushed v* tags, holds exactly the permissions it needs, pins every action by commit
 // SHA, uses no secret except GITHUB_TOKEN, builds linux/amd64 only, and never
 // puts an expression in a shell script) and it requires the supply-chain
 // steps: the tag guard, the build, provenance and SBOM attestations pushed to
@@ -158,8 +158,9 @@ func checkTriggers(c *contract, workflow releaseWorkflow) {
 	push, ok := workflow.On["push"]
 	c.need(ok, "workflow does not run on push")
 	tags, _ := push["tags"].([]any)
-	if len(tags) != 1 || fmt.Sprint(tags[0]) != "v*" || len(push) != 1 {
-		c.add("push trigger is %v, want only tags: [v*]", push)
+	branches, _ := push["branches"].([]any)
+	if len(tags) != 1 || fmt.Sprint(tags[0]) != "v*" || len(branches) != 1 || fmt.Sprint(branches[0]) != "main" || len(push) != 2 {
+		c.add("push trigger is %v, want only branches: [main] and tags: [v*]", push)
 	}
 }
 

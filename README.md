@@ -148,10 +148,11 @@ image, so the stamp is provenance for the installed manifest.
 
 ## Releasing
 
-Only a pushed tag publishes an image. `.github/workflows/release.yml` runs on
-`v*` tags and nothing else, so pull requests and branch pushes publish nothing.
-It uses only the job's `GITHUB_TOKEN`, pins every action by commit SHA, and has
-no deploy step.
+`.github/workflows/release.yml` runs on pushes to `main` and on `v*` tags,
+and nothing else, so pull requests publish nothing. A push to `main` publishes
+the moving `:main` and `:latest` tags plus an immutable `:sha-<long-sha>` tag;
+a pushed tag publishes that tag. The workflow uses only the job's
+`GITHUB_TOKEN`, pins every action by commit SHA, and has no deploy step.
 
 Before the first tag, check the repository settings, because a workflow cannot
 enforce them. Any pushed `v*` tag publishes a public image, so restrict `v*`
