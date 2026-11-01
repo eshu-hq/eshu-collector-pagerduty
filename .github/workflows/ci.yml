@@ -1,33 +1,41 @@
 # CI gates for eshu-collector-pagerduty (org gate contract).
 #
-# Frozen job names: changes, lint, test, race, boundary, shell, image,
-# govulncheck, govulncheck-report, gosec, gosec-sarif, ci-complete.
-# ci-complete is the ONLY context the main ruleset requires: it fails if a
-# needed lane failed and passes when lanes were legitimately skipped
-# (docs-only PRs). A later move of lane bodies to eshu-hq/.github reusable
-# workflows keeps these names, so branch protection never churns.
+# Thin caller over the shared lane bodies in
+# eshu-hq/.github/.github/workflows/go-collector-ci.yml (v2, pinned by
+# commit SHA below, tag only as a trailing comment). This file holds the
+# paths-filter `changes` job, the `go-ci` call with this repo's run-gate
+# wiring, the two caller-side jobs the reusable cannot own (scheduled
+# findings issue, Security-tab SARIF upload), and the `ci-complete`
+# aggregator. ci-complete is the ONLY context the main ruleset requires: it
+# fails if a needed lane failed and passes when lanes were legitimately
+# skipped (docs-only PRs). Lane names inside the reusable are unchanged
+# (lint, test, race, boundary, shell, image, govulncheck, gosec, actionlint);
+# their check runs nest as `go-ci / <lane>`, which is why only the
+# top-level ci-complete may ever be required.
 #
-# Path selection happens once, in `changes` (dorny/paths-filter). A PR only
-# pays for lanes its paths can affect:
-#   docs only (**/*.md, LICENSE) .... no lanes, ci-complete succeeds
+# Path selection happens once, in `changes` (dorny/paths-filter), on every
+# event. A PR only pays for lanes its paths can affect:
+#   docs only (**/*.md, LICENSE*) .... no lanes, ci-complete succeeds
 #   Go sources (**/*.go) ............. lint, test, race, boundary (+ coverage),
-#                                      gosec
-#   fixtures (testdata/**, **/*.json|yaml|yml, manifest.yaml,
+#                                      image, gosec
+#   fixtures (**/*.json|yaml|yml,
 #     *.example.*) ................... test only, unless go also matches
-#   go.mod/go.sum/.golangci.yml ....... lint, test, race, boundary, govulncheck,
-#                                      gosec
+#   testdata/**, manifest.yaml ....... go class: lint, test, race, boundary,
+#                                      image, gosec (compiled or embedded)
+#   go.mod/go.sum/.golangci.yml ...... lint, test, race, boundary, image,
+#                                      govulncheck, gosec
 #   .github/workflows/**,
-#     .github/dependabot.yml .......... actionlint (in lint) plus
-#                                      lint, test, race, boundary, gosec
-#   shell (**/*.sh) ................... shell only
-#   anything else (Makefile, .github/dependabot.yml, future files):
+#     .github/dependabot.yml ......... actionlint plus lint, test, race,
+#                                      boundary, gosec
+#   shell (**/*.sh) .................. shell only
+#   Dockerfile, .dockerignore ........ image only
+#   anything else (Makefile, ...):
 #     the `misc` catch-all runs lint, test, race, boundary (fail closed).
-# Pushes, schedules, and dispatches skip `changes` and run every lane: each
-# lane treats a non-successful changes result as "run" (fail closed), so no
-# event can go green with zero lanes on real changes. Scheduled govulncheck
-# findings open or update an issue via the govulncheck-report job, which is
-# the only job holding issues:write. Likewise gosec-sarif is the only job
-# holding security-events:write; both scan jobs stay at contents:read.
+# Pushes, schedules, and dispatches run every lane: each run-* gate
+# short-circuits on `github.event_name != 'pull_request'`. Each gate below is
+# the exact retired inline `if:` with `always() && needs.changes.result !=
+# 'success'` (true on every non-PR event, when `changes` used to be skipped)
+# replaced by that event test.
 #
 # Fixture entries are test-consumed (proven 2026-10-28 by rg):
 #   testdata/**       fixtures_test.go (testdata/fixtures),
@@ -49,6 +57,60 @@
 # Shell: scripts/run-conformance.sh is a local helper no test executes
 # (rg finds no .sh reader in Go tests), so a shell-only PR runs shell
 # only (no test).
+#
+# Pinned actions (re-verify with git ls-remote when auditing; Dependabot
+# github-actions proposes bumps, weekly grouped):
+#   actions/checkout v7.0.1              3d3c42e5aac5ba805825da76410c181273ba90b1
+#   dorny/paths-filter v4                ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d
+#   actions/download-artifact v7         37930b1c2abaa49bbe596cd826c3c89aef350131
+#   github/codeql-action/upload-sarif v4.39.1 9b3254085494b55a0f7c4c2b3d2d52cc712ce370
+#   eshu-hq/.github v2                   4d01ab90baf5dd77c21cc1ee6bdf701332613449
+# Go tools (passed as reusable inputs so the move neither downgrades nor
+# silently upgrades a scanner; Dependabot cannot see them, bump deliberately):
+#   golangci-lint v2.12.2, govulncheck v1.9.0, gosec v2.30.0 (the reusable
+#   defaults to v2.27.1), actionlint 1.7.12 (tarball sha256 8aca8db9...
+#   verified against the linux_amd64 release asset).
+#
+# Accepted deltas of the move to the reusable (documented, not silent):
+# - Lane timeouts follow the reusable: test 10 (was 15), race 15 (was 20),
+#   shell 5 (was 10), gosec 30 (was 15). A reusable-call job cannot set
+#   timeout-minutes, so the inner timeouts bound the call.
+# - actionlint is its own lane (was a step inside lint), with the same
+#   gate; it runs `actionlint -no-color .github/workflows/*.yml` from the
+#   sha256-checked tarball instead of `go install`.
+# - golangci-lint is `go install`ed then run (was `go run ...@version`),
+#   same version. The tidy step also fails on a dirty go.mod/go.sum.
+# - govulncheck runs `-scan package` (Go 1.26 SSA-safe; was source-mode
+#   `govulncheck ./...`): it reports vulnerable packages whether or not the
+#   symbol is reached, so it can flag more than before.
+# - shellcheck comes from ludeeus/action-shellcheck pinned by SHA inside
+#   the reusable; the repo's SHELLCHECK_VERSION 0.11.0 / sha256 pins have no
+#   input and retire with this move.
+# - The race lane's per-package coverage table is the reusable's
+#   `go tool cover -func | tail -n 30` summary; the floor (90.8) still
+#   fails the lane below it and is held equal to the Makefile by
+#   TestCoverageFloorParity. The artifact is coverage-pagerduty (was
+#   coverage-<sha>).
+# - gosec stays advisory on every event (gosec-fail-on-findings: false),
+#   as before, but the reusable's lane fails if gosec.sarif is missing
+#   (the retired lane stayed green). The SARIF artifact is gosec-pagerduty
+#   (was gosec-<sha>) and now carries gosec.log too; the Security-tab upload
+#   stays in the gosec-sarif caller job, which runs on non-PR events
+#   whenever go-ci was not cancelled.
+# - The reusable keeps no govulncheck report artifact. On a schedule event
+#   every lane runs, and a failed go-ci (govulncheck findings included) is
+#   now a red scheduled run that files or updates one issue through the
+#   govulncheck-report job (job name unchanged, title is now generic). The
+#   findings text is no longer embedded in the issue body (the run link is),
+#   and the workflow_dispatch download-only proof of that job is gone.
+#   The retired issue lookup passed a nonexistent `--query` flag to
+#   `gh issue list`; the lookup now uses --jq.
+# - Image digest-pin proofs are NEW gates in the image-command hook (tempo
+#   parity): every manifest.yaml `image:` line and every Dockerfile FROM
+#   must be digest-pinned. Both hold in this repo today
+#   (TestRepoFilesSatisfyImagePinProofs).
+# - `changes` now runs on every event; a failed `changes` skips go-ci and
+#   trips ci-complete directly (it is in ci-complete's needs).
 name: ci
 
 on:
@@ -59,27 +121,22 @@ on:
     - cron: "0 9 * * 1"
   workflow_dispatch:
 
-permissions: {}
+# The reusable requests contents: read, and a called workflow can never hold
+# more than its caller, so the workflow default cannot be {} any more. Jobs
+# that need less (ci-complete) narrow it back to none.
+permissions:
+  contents: read
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-env:
-  GOLANGCI_VERSION: 2.12.2
-  GOVULNCHECK_VERSION: 1.9.0
-  GOSEC_VERSION: 2.30.0
-  ACTIONLINT_VERSION: 1.7.12
-  SHELLCHECK_VERSION: 0.11.0
-  SHELLCHECK_SHA256: 8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198
-  COVERAGE_FLOOR: "90.8"
-
 jobs:
   changes:
-    # Path selection runs once, on pull requests. Pushes, schedules, and
-    # dispatches skip this job and run every lane: each lane treats a
-    # non-successful changes result as "run" (fail closed).
-    if: github.event_name == 'pull_request'
+    # Runs on every event on purpose, with no if: guard: every lane needs
+    # this job, so skipping it on push or schedule drags all lanes to
+    # skipped and the run goes vacantly green. On non-PR events the filter
+    # outputs go unused (each run-* gate short-circuits on the event).
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -168,321 +225,112 @@ jobs:
               - '!.dockerignore'
               - '!.github/workflows/**'
 
-  lint:
+  go-ci:
     needs: [changes]
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.go == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflow == 'true' || needs.changes.outputs.misc == 'true')
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # No timeout-minutes here: a reusable-call job accepts only name/uses/
+    # with/secrets/needs/if/permissions (actionlint rejects the file
+    # otherwise), so the run ceiling lives in the upstream inner-lane
+    # timeouts (lint/image 15, race 15, test/boundary/govulncheck 10,
+    # gosec 30, shell/actionlint 5).
     permissions:
       contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-      - name: Vet
-        run: go vet ./...
-      - name: golangci-lint
-        run: go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v${{ env.GOLANGCI_VERSION }} run ./...
-      - name: Format check (gofumpt)
-        run: go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v${{ env.GOLANGCI_VERSION }} fmt --diff ./...
-      - name: Module tidiness
-        run: go mod tidy -diff
-      - name: 500-line file cap
-        run: |
-          set -euo pipefail
-          over=$(git ls-files '*.go' | while IFS= read -r f; do
-            n=$(wc -l < "$f")
-            if [ "$n" -gt 500 ]; then printf '%s (%s lines)\n' "$f" "$n"; fi
-          done)
-          if [ -n "$over" ]; then
-            echo "Files over the 500-line cap:"
-            echo "$over"
-            exit 1
-          fi
-          echo "500-line cap: OK ($(git ls-files '*.go' | wc -l) files checked)"
-      - name: Install actionlint
-        if: github.event_name != 'pull_request' || needs.changes.outputs.workflow == 'true'
-        run: |
-          set -euo pipefail
-          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
-          go install github.com/rhysd/actionlint/cmd/actionlint@v${{ env.ACTIONLINT_VERSION }}
-      - name: actionlint
-        if: github.event_name != 'pull_request' || needs.changes.outputs.workflow == 'true'
-        run: actionlint
-
-  test:
-    needs: [changes]
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.go == 'true' || needs.changes.outputs.fixtures == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflow == 'true' || needs.changes.outputs.misc == 'true')
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-      - name: Build
-        run: go build ./...
-      - name: Test
-        run: go test ./... -count=1
-
-  race:
-    needs: [changes]
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.go == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflow == 'true' || needs.changes.outputs.misc == 'true')
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-      - name: Race tests with coverage
-        run: go test ./... -race -count=1 -covermode=atomic -coverprofile=coverage.out
-      - name: Upload coverage artifact
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: coverage-${{ github.sha }}
-          path: coverage.out
-          retention-days: 14
-      - name: Coverage summary and floor
-        run: |
-          set -euo pipefail
-          total=$(go tool cover -func=coverage.out | awk '/^total:/ { gsub(/%/, "", $3); print $3 }')
-          {
-            echo "## Coverage"
-            echo ""
-            echo "Total: **${total}%** (floor ${COVERAGE_FLOOR}%)"
-            echo ""
-            echo "| Package | Statements |"
-            echo "| --- | --- |"
-            grep -v '^mode:' coverage.out | awk '{ f=$1; sub(/:[0-9]+\.[0-9]+,[0-9]+\.[0-9]+$/, "", f); pkg=f; sub(/\/[^/]+$/, "", pkg); s[pkg]+=$2; if ($3 > 0) c[pkg]+=$2 } END { for (p in s) printf "| %s | %.1f%% (%d/%d) |\n", p, 100*c[p]/s[p], c[p], s[p] }' | sort
-          } >> "$GITHUB_STEP_SUMMARY"
-          echo "total coverage: ${total}% (floor ${COVERAGE_FLOOR}%)"
-          awk -v total="$total" -v floor="$COVERAGE_FLOOR" 'BEGIN { if (total + 0 < floor + 0) { printf "coverage %.1f%% is below floor %s%%\n", total, floor; exit 1 } }'
-
-  boundary:
-    needs: [changes]
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.go == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflow == 'true' || needs.changes.outputs.misc == 'true')
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-      - name: SDK boundary
-        run: go test -count=1 -run TestImportBoundaryRejectsCoreAndCrossCollectorImports .
-
-  shell:
-    needs: [changes]
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.shell == 'true')
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: shellcheck
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -fsSL -o /tmp/pagerduty-shellcheck.tar.xz "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.xz"
-          echo "${SHELLCHECK_SHA256}  /tmp/pagerduty-shellcheck.tar.xz" | sha256sum -c -
-          tar -xJf /tmp/pagerduty-shellcheck.tar.xz -C /tmp
-          shopt -s globstar nullglob
-          files=(**/*.sh)
-          if ((${#files[@]} == 0)); then
-            echo "No shell scripts in tree; lane passes vacuous."
-            exit 0
-          fi
-          shellcheck_bin="/tmp/shellcheck-v${SHELLCHECK_VERSION}/shellcheck"
-          "$shellcheck_bin" "${files[@]}"
-
-  image:
-    needs: [changes]
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.image == 'true' || needs.changes.outputs.go == 'true')
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Build the image without pushing it
-        run: docker build --tag eshu-collector-pagerduty:ci .
-      - name: Seed from the image into an empty directory
-        run: |
-          set -euo pipefail
-          seed="$RUNNER_TEMP/pagerduty-seed"
-          mkdir -p "$seed" && chmod 777 "$seed"
-          docker run --rm -v "$seed:/seed" eshu-collector-pagerduty:ci seed --dest /seed
-          test -x "$seed/collector"
-          cmp "$seed/manifest.yaml" manifest.yaml
-      - name: Seed with a stamped image reference
-        run: |
-          set -euo pipefail
-          seed="$RUNNER_TEMP/pagerduty-seed"
-          ref="ghcr.io/eshu-hq/eshu-collector-pagerduty@sha256:$(printf 'ab%.0s' $(seq 32))"
-          docker run --rm -e COLLECTOR_IMAGE_REF="$ref" -v "$seed:/seed" eshu-collector-pagerduty:ci seed --dest /seed
-          [[ "$(cat "$seed/manifest.yaml")" == *"image: $ref"* ]]
-          if docker run --rm -v "$seed:/seed" eshu-collector-pagerduty:ci seed --dest /seed --image-ref not-a-digest; then exit 1; fi
-
-  govulncheck:
-    needs: [changes]
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.deps == 'true')
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    # PR scans run with a read-only token: issue filing lives in
-    # govulncheck-report, which carries issues:write and runs on schedule
-    # only when this scan failed. workflow_dispatch also runs the report
-    # job (download only) for pre-merge proof.
-    permissions:
-      contents: read
-    outputs:
-      scan-outcome: ${{ steps.scan.outcome }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-      - name: Scan
-        id: scan
-        continue-on-error: ${{ github.event_name == 'schedule' }}
-        run: |
-          set -euo pipefail
-          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
-          go install golang.org/x/vuln/cmd/govulncheck@v${{ env.GOVULNCHECK_VERSION }}
-          govulncheck ./... | tee govulncheck.txt
-      - name: Upload scan report (schedule and dispatch only)
-        if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && hashFiles('govulncheck.txt') != ''
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: govulncheck-${{ github.sha }}
-          path: govulncheck.txt
-          retention-days: 14
+    uses: eshu-hq/.github/.github/workflows/go-collector-ci.yml@4d01ab90baf5dd77c21cc1ee6bdf701332613449 # v2
+    with:
+      module: pagerduty
+      go-version-file: go.mod
+      coverage-floor: 90.8
+      golangci-lint-version: v2.12.2
+      govulncheck-version: v1.9.0
+      gosec-version: v2.30.0
+      actionlint-version: 1.7.12
+      actionlint-sha256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+      run-lint: ${{ github.event_name != 'pull_request' || needs.changes.outputs.go == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflow == 'true' || needs.changes.outputs.misc == 'true' }}
+      run-test: ${{ github.event_name != 'pull_request' || needs.changes.outputs.go == 'true' || needs.changes.outputs.fixtures == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflow == 'true' || needs.changes.outputs.misc == 'true' }}
+      run-race: ${{ github.event_name != 'pull_request' || needs.changes.outputs.go == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflow == 'true' || needs.changes.outputs.misc == 'true' }}
+      run-boundary: ${{ github.event_name != 'pull_request' || needs.changes.outputs.go == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflow == 'true' || needs.changes.outputs.misc == 'true' }}
+      boundary-command: go test -count=1 -run TestImportBoundaryRejectsCoreAndCrossCollectorImports .
+      run-shell: ${{ github.event_name != 'pull_request' || needs.changes.outputs.shell == 'true' }}
+      # Go sources ship in the image (the Dockerfile COPYs go.mod/go.sum and
+      # the whole context, then go-builds the binary), so Go-class PRs must
+      # select the image lane: a go.mod toolchain bump past the pinned base
+      # would otherwise pass every Go lane yet break docker build.
+      run-image: ${{ github.event_name != 'pull_request' || needs.changes.outputs.image == 'true' || needs.changes.outputs.go == 'true' }}
+      image-tag: eshu-collector-pagerduty:ci
+      image-context: .
+      image-command: |
+        set -euo pipefail
+        seed="$RUNNER_TEMP/pagerduty-seed"
+        mkdir -p "$seed" && chmod 777 "$seed"
+        docker run --rm -v "$seed:/seed" eshu-collector-pagerduty:ci seed --dest /seed
+        test -x "$seed/collector"
+        cmp "$seed/manifest.yaml" manifest.yaml
+        ref="ghcr.io/eshu-hq/eshu-collector-pagerduty@sha256:$(printf 'ab%.0s' $(seq 32))"
+        docker run --rm -e COLLECTOR_IMAGE_REF="$ref" -v "$seed:/seed" eshu-collector-pagerduty:ci seed --dest /seed
+        [[ "$(cat "$seed/manifest.yaml")" == *"image: $ref"* ]]
+        if docker run --rm -v "$seed:/seed" eshu-collector-pagerduty:ci seed --dest /seed --image-ref not-a-digest; then exit 1; fi
+        total=$(grep -Ec '^[[:space:]]*image:' manifest.yaml)
+        pinned=$(grep -Ec '^[[:space:]]*image:[[:space:]]*[^[:space:]#]+@sha256:[0-9a-f]{64}[[:space:]]*$' manifest.yaml)
+        echo "manifest image refs: $pinned/$total digest-pinned"
+        [ "$pinned" -ge 1 ] && [ "$pinned" -eq "$total" ]
+        from_total=$(grep -Ec '^[[:space:]]*FROM ' Dockerfile)
+        from_pinned=$(grep -Ec '^[[:space:]]*FROM [^[:space:]]+@sha256:[0-9a-f]{64}' Dockerfile)
+        echo "Dockerfile bases: $from_pinned/$from_total digest-pinned"
+        [ "$from_pinned" -eq "$from_total" ]
+      run-govulncheck: ${{ github.event_name != 'pull_request' || needs.changes.outputs.deps == 'true' }}
+      run-gosec: ${{ github.event_name != 'pull_request' || needs.changes.outputs.go == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflow == 'true' }}
+      # Advisory on every event, as the retired lane was; findings ride the
+      # SARIF artifact and the Security tab.
+      gosec-fail-on-findings: false
+      run-actionlint: ${{ github.event_name != 'pull_request' || needs.changes.outputs.workflow == 'true' }}
 
   govulncheck-report:
-    needs: [govulncheck]
-    if: always() && ((github.event_name == 'schedule' && needs.govulncheck.outputs.scan-outcome == 'failure') || github.event_name == 'workflow_dispatch')
+    # The reusable runs contents:read-only, so issue filing stays a caller
+    # job and the only holder of issues:write. Every lane runs on schedule,
+    # so one combined issue per day: it fires only when go-ci failed on a
+    # schedule event and comments instead of duplicating an open one.
+    needs: [go-ci]
+    if: failure() && github.event_name == 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    # The only job with issues:write. A checkout is required even though
-    # the report arrives via the run artifact: `gh run download` resolves
-    # the repo from the git remote and fails without a git dir.
-    # workflow_dispatch also runs this job (issue filing stays
-    # schedule-only) so the download path gets pre-merge proof.
     permissions:
       contents: read
       issues: write
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Download scan report
+      - name: File or update the scheduled findings issue
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          gh run download "$GITHUB_RUN_ID" -n "govulncheck-${{ github.sha }}" --dir .
-      - name: File or update tracking issue (schedule only)
-        if: github.event_name == 'schedule'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          title="govulncheck findings ($(date -u +%F))"
-          if [ -f govulncheck.txt ]; then
-            findings=$(cat govulncheck.txt)
-          else
-            findings="(govulncheck report unavailable — the scan step produced no output file)"
-          fi
-          body="Weekly govulncheck run $GITHUB_RUN_ID reported findings. See the run log for the full report."
-          body="$body Findings: $findings"
-          number=$(gh issue list --search "$title in:title" --state open --json number --query '.[0].number')
-          if [ -n "$number" ] && [ "$number" != "null" ]; then
-            gh issue comment "$number" --body "$body"
+          title="[ci] scheduled scan findings $(date -u +%F)"
+          body="Scheduled CI (govulncheck, gosec, and every other lane) failed on ${{ github.sha }}. See run ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}."
+          open=$(gh issue list --search "$title in:title" --state open --json number --jq '.[0].number')
+          if [ -n "$open" ] && [ "$open" != "null" ]; then
+            gh issue comment "$open" --body "$body"
           else
             gh issue create --title "$title" --body "$body"
           fi
 
-  gosec:
-    needs: [changes]
-    if: always() && (needs.changes.result != 'success' || needs.changes.outputs.go == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.workflow == 'true')
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    # Fork PRs run this scan with a read-only token: SARIF upload lives in
-    # gosec-sarif, which carries security-events:write and runs on
-    # push/schedule/dispatch when this scan produced a report.
-    permissions:
-      contents: read
-    outputs:
-      has-sarif: ${{ steps.sarif.outputs.present }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: go.mod
-      - name: Scan (advisory)
-        id: scan
-        continue-on-error: true
-        run: |
-          set -euo pipefail
-          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
-          go install github.com/securego/gosec/v2/cmd/gosec@v${{ env.GOSEC_VERSION }}
-          gosec -fmt sarif -out gosec.sarif ./...
-      - name: Report findings
-        if: always()
-        run: |
-          set -euo pipefail
-          if [ ! -f gosec.sarif ]; then
-            echo "gosec.sarif missing (scan step produced no output) — advisory lane stays green" >> "$GITHUB_STEP_SUMMARY"
-            echo "gosec.sarif missing (scan step produced no output) — advisory lane stays green"
-            exit 0
-          fi
-          count=$(python3 -c "import json; print(sum(len(r.get('results', [])) for r in json.load(open('gosec.sarif'))['runs']))")
-          echo "gosec findings: $count (advisory — triaged in the Security tab, never blanket-excluded)" >> "$GITHUB_STEP_SUMMARY"
-          echo "gosec findings: $count (advisory)"
-      - name: Check SARIF output
-        id: sarif
-        if: always()
-        run: |
-          set -euo pipefail
-          if [ -f gosec.sarif ]; then present=true; else present=false; fi
-          {
-            echo "present=${present}"
-          } >> "$GITHUB_OUTPUT"
-      - name: Upload SARIF artifact (push/schedule/dispatch only)
-        if: always() && (github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && hashFiles('gosec.sarif') != ''
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: gosec-${{ github.sha }}
-          path: gosec.sarif
-          retention-days: 14
-
   gosec-sarif:
-    needs: [gosec]
-    if: always() && (github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && needs.gosec.outputs.has-sarif == 'true'
+    # Security-tab upload the reusable deliberately omits (fork PRs run on a
+    # read-only token): non-PR events only, and the only job holding
+    # security-events:write. It downloads the gosec-pagerduty artifact the
+    # reusable's gosec lane uploads (named gosec-<module>), so it also runs
+    # when an unrelated go-ci lane failed.
+    needs: [go-ci]
+    if: ${{ !cancelled() && github.event_name != 'pull_request' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    # The only job with security-events:write. A checkout is required even
-    # though the SARIF report arrives via the run artifact: `gh run
-    # download` resolves the repo from the git remote and fails without a
-    # git dir. workflow_dispatch also runs this job so the download path
-    # gets pre-merge proof.
     permissions:
       contents: read
-      security-events: write
+      actions: read # download the gosec artifact
+      security-events: write # SARIF upload to the Security tab
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Download SARIF report
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          gh run download "$GITHUB_RUN_ID" -n "gosec-${{ github.sha }}" --dir .
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: gosec-pagerduty
+          path: ${{ github.workspace }}
       - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4.39.1
         with:
@@ -491,7 +339,7 @@ jobs:
   ci-complete:
     # changes is listed so a failed path-selection job cannot false-green:
     # its lanes would skip while the failure itself trips the aggregator.
-    needs: [changes, lint, test, race, boundary, shell, image, govulncheck, govulncheck-report, gosec, gosec-sarif]
+    needs: [changes, go-ci, govulncheck-report, gosec-sarif]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5

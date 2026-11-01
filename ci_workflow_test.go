@@ -28,6 +28,7 @@ func TestCIWorkflowAggregateNeedsEveryJob(t *testing.T) {
 		On   map[string]any `yaml:"on"`
 		Jobs map[string]struct {
 			If    string   `yaml:"if"`
+			Uses  string   `yaml:"uses"`
 			Needs []string `yaml:"needs"`
 			Steps []struct {
 				Uses string `yaml:"uses"`
@@ -64,6 +65,11 @@ func TestCIWorkflowAggregateNeedsEveryJob(t *testing.T) {
 		t.Errorf("ci-complete needs %v, want every other job %v", needs, others)
 	}
 	for name, job := range workflow.Jobs {
+		// A job-level uses is the reusable call; it carries the same pin
+		// contract as step-level action refs.
+		if job.Uses != "" && !pinnedAction.MatchString(job.Uses) {
+			t.Errorf("job %s uses %q, want a commit-SHA pin", name, job.Uses)
+		}
 		for _, step := range job.Steps {
 			if step.Uses != "" && !pinnedAction.MatchString(step.Uses) {
 				t.Errorf("job %s uses %q, want a commit-SHA pin", name, step.Uses)
@@ -92,6 +98,8 @@ type ciStep struct {
 type ciJob struct {
 	If          string            `yaml:"if"`
 	Needs       []string          `yaml:"needs"`
+	Uses        string            `yaml:"uses"`
+	With        map[string]any    `yaml:"with"`
 	Permissions map[string]string `yaml:"permissions"`
 	Timeout     int               `yaml:"timeout-minutes"`
 	Env         map[string]string `yaml:"env"`
@@ -124,53 +132,21 @@ func readCIWorkflowShape(t *testing.T) ciWorkflow {
 	return workflow
 }
 
-// frozenCILanes are the stable org job names for this repo. Only ci-complete
-// is ever required in a ruleset, so these names must not churn. boundary is
-// kept: the SDK-import guard runs as its own lane.
-var frozenCILanes = []string{
-	"changes", "lint", "test", "race", "boundary", "shell", "image",
-	"govulncheck", "govulncheck-report", "gosec", "gosec-sarif", "ci-complete",
-}
-
-// TestCIWorkflowKeepsFrozenJobNames keeps the org lane contract: the frozen
-// names exist, and the retired vet job is gone (vet is a step in lint now).
-func TestCIWorkflowKeepsFrozenJobNames(t *testing.T) {
-	t.Parallel()
-
-	workflow := readCIWorkflowShape(t)
-	for _, name := range frozenCILanes {
-		if _, ok := workflow.Jobs[name]; !ok {
-			t.Errorf("ci.yml has no %q job, want the frozen lane names %v", name, frozenCILanes)
-		}
-	}
-	if _, ok := workflow.Jobs["vet"]; ok {
-		t.Error(`ci.yml still has a "vet" job, want it folded into the lint lane`)
-	}
-	complete, ok := workflow.Jobs["ci-complete"]
-	if !ok {
-		t.Fatal("ci.yml has no ci-complete job")
-	}
-	needed := make(map[string]bool, len(complete.Needs))
-	for _, name := range complete.Needs {
-		needed[name] = true
-	}
-	for _, name := range frozenCILanes {
-		if name == "ci-complete" {
-			continue
-		}
-		if !needed[name] {
-			t.Errorf("ci-complete needs %v, want every other frozen lane %v", complete.Needs, frozenCILanes)
-		}
-	}
-}
-
 // TestCIWorkflowSetsJobTimeouts keeps a hung runner from holding a PR open
-// forever: every lane declares a timeout.
+// forever: every caller job declares a timeout. The reusable call is the one
+// exception: the workflow schema forbids timeout-minutes on it, and each
+// inner lane in the pinned reusable carries its own timeout.
 func TestCIWorkflowSetsJobTimeouts(t *testing.T) {
 	t.Parallel()
 
 	workflow := readCIWorkflowShape(t)
 	for name, job := range workflow.Jobs {
+		if job.Uses != "" {
+			if job.Timeout != 0 {
+				t.Errorf("job %s sets timeout-minutes on a reusable call: the schema forbids it", name)
+			}
+			continue
+		}
 		if job.Timeout <= 0 {
 			t.Errorf("job %s sets no timeout-minutes", name)
 		}
@@ -205,6 +181,10 @@ func TestCIWorkflowPRLeanesNeedNoConfiguredSecrets(t *testing.T) {
 		var texts []string
 		for key, value := range job.Env {
 			texts = append(texts, key+"="+value)
+		}
+		// Reusable inputs carry the same no-secret contract as steps.
+		for key, value := range job.With {
+			texts = append(texts, key+"="+fmt.Sprint(value))
 		}
 		for _, step := range job.Steps {
 			texts = append(texts, step.Run)
@@ -275,125 +255,6 @@ func TestCICompleteAggregatesPerJobResults(t *testing.T) {
 		if len(aggregatorProblems(run)) == 0 {
 			t.Errorf("%s: the gate accepted a violating aggregator", name)
 		}
-	}
-}
-
-// govulnReportProblems returns every way the govulncheck lane pair breaks
-// its schedule-only notification contract: the scan must stay loud on PRs
-// (no -no-fail, no || true, no unconditional continue-on-error) so the
-// report job's scan-outcome stays meaningful, and the report job must carry
-// a checkout, a run-artifact download, and a schedule-gated issue step.
-func govulnReportProblems(scan ciJob, report ciJob) []string {
-	var problems []string
-	var scanRuns []string
-	for _, step := range scan.Steps {
-		scanRuns = append(scanRuns, step.Run)
-		if strings.Contains(step.Run, "govulncheck") {
-			for _, quiet := range []string{"-no-fail", "|| true"} {
-				if strings.Contains(step.Run, quiet) {
-					problems = append(problems, "govulncheck scan contains "+quiet+" (the report job is unreachable)")
-				}
-			}
-			if coe, ok := step.ContinueOnError.(bool); ok && coe {
-				problems = append(problems, "govulncheck scan sets continue-on-error: true (the report job is unreachable)")
-			}
-		}
-	}
-	joined := strings.Join(scanRuns, "\n")
-	if !strings.Contains(joined, "govulncheck") {
-		problems = append(problems, "govulncheck job has no scan step")
-	}
-	var reportRuns []string
-	for _, step := range report.Steps {
-		reportRuns = append(reportRuns, step.Run+" || "+step.If)
-	}
-	reportJoined := strings.Join(reportRuns, "\n")
-	if !strings.Contains(reportJoined, "actions/checkout") && !hasCheckoutStep(report) {
-		problems = append(problems, "govulncheck-report has no checkout (gh run download fails without a git dir)")
-	}
-	if !strings.Contains(reportJoined, "gh run download") {
-		problems = append(problems, "govulncheck-report has no gh run download step")
-	}
-	if !strings.Contains(reportJoined, "gh issue create") {
-		problems = append(problems, "govulncheck-report has no gh issue create step")
-	}
-	if !strings.Contains(report.If, "schedule") && !strings.Contains(reportJoined, "schedule") {
-		problems = append(problems, "govulncheck-report issue filing lacks the schedule gate")
-	}
-	if report.Permissions["issues"] != "write" {
-		problems = append(problems, "govulncheck-report holds no issues:write")
-	}
-	return problems
-}
-
-func hasCheckoutStep(job ciJob) bool {
-	for _, step := range job.Steps {
-		if strings.HasPrefix(step.Uses, "actions/checkout@") {
-			return true
-		}
-	}
-	return false
-}
-
-// TestGovulncheckReportIsReachable pins the schedule-only notification
-// shape: the live ci.yml text must pass.
-func TestGovulncheckReportIsReachable(t *testing.T) {
-	t.Parallel()
-
-	workflow := readCIWorkflowShape(t)
-	scan, ok := workflow.Jobs["govulncheck"]
-	if !ok {
-		t.Fatal("ci.yml has no govulncheck job")
-	}
-	report, ok := workflow.Jobs["govulncheck-report"]
-	if !ok {
-		t.Fatal("ci.yml has no govulncheck-report job")
-	}
-	if problems := govulnReportProblems(scan, report); len(problems) > 0 {
-		t.Errorf("govulncheck notification is unreachable:\n%s", strings.Join(problems, "\n"))
-	}
-}
-
-// TestImageLaneRunsOnGoSources keeps the shipped artifact validated on
-// PRs that change what it embeds: the Dockerfile COPYs go.mod/go.sum,
-// COPYs the whole context (which keeps .go sources), and go-builds the
-// binary, so a Go-source or go.mod PR must select the image lane. A
-// go.mod toolchain bump past the pinned base would otherwise pass every
-// Go lane yet break docker build, surfacing only as post-merge red main.
-func TestImageLaneRunsOnGoSources(t *testing.T) {
-	t.Parallel()
-
-	workflow := readCIWorkflowShape(t)
-	job, ok := workflow.Jobs["image"]
-	if !ok {
-		t.Fatal("ci.yml has no image job")
-	}
-	if !strings.Contains(job.If, "needs.changes.outputs.go == 'true'") {
-		t.Errorf("job image if = %q, want the go selecting clause: Go sources ship in the image", job.If)
-	}
-	if strings.Contains(job.If, "needs.changes.outputs.go !=") {
-		t.Errorf("job image if = %q, want == 'true', not an inverted comparison", job.If)
-	}
-	if strings.Contains(job.If, "needs.changes.outputs.go == 'false'") {
-		t.Errorf("job image if = %q, want == 'true', not == 'false'", job.If)
-	}
-
-	raw, err := os.ReadFile(".github/workflows/ci.yml")
-	if err != nil {
-		t.Fatal(err)
-	}
-	text := string(raw)
-	goIdx := strings.Index(text, "\n            go:\n")
-	if goIdx < 0 {
-		t.Fatal("ci.yml changes job has no go: filter")
-	}
-	rest := text[goIdx:]
-	end := strings.Index(rest, "\n            fixtures:")
-	if end < 0 {
-		t.Fatal("ci.yml changes job has no fixtures: filter after go:")
-	}
-	if !strings.Contains(rest[:end], "'**/*.go'") {
-		t.Errorf("ci.yml go: filter lacks '**/*.go': Go sources would not select the Go lanes")
 	}
 }
 
