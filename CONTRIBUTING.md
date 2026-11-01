@@ -13,6 +13,8 @@ workflow-syntax break fails before push.
 
 Need a single lane? `make lint`, `make test`, or `make race` run on their own.
 
+`bash scripts/pagerduty-seed-matrix.sh` is a local seeded RED/GREEN matrix: it plants a defect per lane (vet, lint, format, race, tidy, the 500-line cap, the coverage floor), asserts the lane turns red naming the seed, removes it, and asserts green again. It is not a CI gate.
+
 ## Coverage floor
 
 The `race` lane uploads a coverprofile artifact, posts per-package totals to
