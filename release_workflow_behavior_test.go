@@ -19,6 +19,7 @@ const (
 	tagShapeStep  = "Require a semantic version tag"
 	checkoutStep  = "Check out the tagged commit"
 	tagGuardStep  = "Require the tag to match the manifest version"
+	mainHeadStep  = "Require the tag to point at the protected main head"
 	anonymousStep = "Require the package to be public"
 	attestStep    = "Verify the attestations"
 	// A digest that contains 401 and 403 proves the access check matches words,
@@ -108,6 +109,58 @@ func tagGuardProblems(t *testing.T, run string) []string {
 		t.Fatalf("manifest.yaml has no metadata.version: %v", err)
 	}
 	check(string(real), "v"+parsed.Metadata.Version, true)
+	return problems
+}
+
+// mainHeadProblems runs the main-head guard against a scratch origin whose
+// main branch has moved past the tagged commit.
+func mainHeadProblems(t *testing.T, run string) []string {
+	t.Helper()
+	root := t.TempDir()
+	git := func(dir string, args ...string) string {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		cmd.Env = []string{
+			"PATH=" + os.Getenv("PATH"), "HOME=" + root, "GIT_CONFIG_NOSYSTEM=1",
+			"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@example.invalid",
+			"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@example.invalid",
+		}
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v error = %v: %s", args, err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	origin := filepath.Join(root, "origin.git")
+	work := filepath.Join(root, "work")
+	git(root, "init", "--bare", "--initial-branch=main", origin)
+	git(root, "clone", origin, work)
+	git(work, "checkout", "-b", "main")
+	git(work, "commit", "--allow-empty", "-m", "first")
+	oldCommit := git(work, "rev-parse", "HEAD")
+	git(work, "commit", "--allow-empty", "-m", "second")
+	headCommit := git(work, "rev-parse", "HEAD")
+	git(work, "push", "origin", "main")
+	// The runner's checkout holds the tagged commit with no origin/main yet.
+	git(work, "update-ref", "-d", "refs/remotes/origin/main")
+	var problems []string
+	for _, scenario := range []struct {
+		name, commit string
+		wantPass     bool
+	}{
+		{"tag at the main head", headCommit, true},
+		{"tag behind the main head", oldCommit, false},
+		{"tag at an unknown commit", strings.Repeat("0", 40), false},
+	} {
+		env := map[string]string{"TAG_NAME": "v0.1.0", "TAG_COMMIT": scenario.commit}
+		out, code := runReleaseScript(t, run, work, env, nil)
+		if (code == 0) != scenario.wantPass {
+			problems = append(problems, fmt.Sprintf("%s: exit %d, want pass=%v (%s)", scenario.name, code, scenario.wantPass, strings.TrimSpace(out)))
+		}
+		if !scenario.wantPass && !strings.Contains(out, "not the protected main head "+headCommit) {
+			problems = append(problems, fmt.Sprintf("%s: refused without naming the main head (%s)", scenario.name, strings.TrimSpace(out)))
+		}
+	}
 	return problems
 }
 
@@ -244,6 +297,7 @@ func spdxPredicateProblems(t *testing.T, run string) []string {
 var releaseScriptChecks = map[string]func(*testing.T, string) []string{
 	tagShapeStep:  tagShapeProblems,
 	tagGuardStep:  tagGuardProblems,
+	mainHeadStep:  mainHeadProblems,
 	anonymousStep: anonymousCheckProblems,
 	attestStep:    spdxPredicateProblems,
 }
@@ -304,7 +358,12 @@ func TestReleaseWorkflowScriptChecksCatchSeededViolations(t *testing.T) {
 		"tag guard accepts empty":       {tagGuardStep, func(t *testing.T, s string) string { return replaceLast(t, s, `test -n "${version}"`, "true") }},
 		"tag guard refuses -rc suffix":  {tagGuardStep, func(t *testing.T, s string) string { return replaceLast(t, s, `${TAG_NAME%%-*}`, `${TAG_NAME}`) }},
 		"tag guard reads every version": {tagGuardStep, func(t *testing.T, s string) string { return replaceLast(t, s, "; exit}", "}") }},
-		"anonymous check never fails":   {anonymousStep, func(t *testing.T, s string) string { return replaceLast(t, s, "exit 1", "exit 0") }},
+		"main head guard never fails":   {mainHeadStep, func(t *testing.T, s string) string { return replaceLast(t, s, "exit 1", "exit 0") }},
+		"main head guard compares self": {mainHeadStep, func(t *testing.T, s string) string {
+			return replaceLast(t, s, `"${TAG_COMMIT}" != "${main_head}"`, `"${TAG_COMMIT}" != "${TAG_COMMIT}"`)
+		}},
+		"main head guard stale ref":   {mainHeadStep, func(t *testing.T, s string) string { return replaceLast(t, s, "git fetch origin main --quiet\n", "") }},
+		"anonymous check never fails": {anonymousStep, func(t *testing.T, s string) string { return replaceLast(t, s, "exit 1", "exit 0") }},
 		"anonymous any failure private": {anonymousStep, func(t *testing.T, s string) string {
 			return replaceLast(t, s, `printf '%s' "${output}" | grep -Eqi 'unauthorized|denied|forbidden'`, "true")
 		}},

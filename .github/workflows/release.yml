@@ -3,10 +3,11 @@
 #
 # Publishes the collector image on every push to main and on every pushed
 # version tag. Nothing runs on a pull request, and nothing here deploys.
-# A v* tag push publishes that tag after the tag-shape and manifest-version
-# guards pass; those guards run only on tag events. A push to main publishes
-# the moving main, latest, and sha-<full-sha> tags with the same provenance,
-# signature, SBOM, and attestation hardening as version-tag releases.
+# A v* tag push publishes that tag after the tag-shape, protected-main-head,
+# and manifest-version guards pass; those guards run only on tag events. A
+# push to main publishes the moving main, latest, and sha-<full-sha> tags with
+# the same provenance, signature, SBOM, and attestation hardening as
+# version-tag releases.
 # The only credential is the job's GITHUB_TOKEN. There is no deploy step: the
 # job records the digest in its summary, and a person copies that digest into
 # the activation's seed.image (see README, "Releasing").
@@ -38,7 +39,7 @@ jobs:
       attestations: write
     env:
       REGISTRY: ghcr.io
-      IMAGE_NAME: eshu-hq/eshu-collector-pagerduty
+      IMAGE_NAME: ${{ github.repository }}
       TAG_NAME: ${{ github.ref_name }}
     steps:
       # The tag only reaches the shell through TAG_NAME. A tag that is not a
@@ -57,6 +58,20 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      # The tagged commit must be the head of main, so a tag cut from a branch
+      # or an older commit cannot publish an image.
+      - name: Require the tag to point at the protected main head
+        if: github.ref_type == 'tag'
+        env:
+          TAG_COMMIT: ${{ github.sha }}
+        run: |
+          git fetch origin main --quiet
+          main_head="$(git rev-parse origin/main)"
+          if [[ "${TAG_COMMIT}" != "${main_head}" ]]; then
+            echo "tag '${TAG_NAME}' points at ${TAG_COMMIT}, not the protected main head ${main_head}" >&2
+            exit 1
+          fi
 
       - name: Require the tag to match the manifest version
         if: github.ref_type == 'tag'

@@ -156,9 +156,9 @@ a pushed tag publishes that tag. The workflow uses only the job's
 
 Before the first tag, check the repository settings, because a workflow cannot
 enforce them. Any pushed `v*` tag publishes a public image, so restrict `v*`
-tag creation to maintainers (a repository ruleset for tags). The workflow checks
-the tag against `manifest.yaml` but does not check that the tagged commit is on
-`main`, so tag only a commit that was merged there.
+tag creation to maintainers (a repository ruleset for tags). The workflow
+refuses a tag that does not point at the current head of `main`, and checks the
+tag against `manifest.yaml`, so tag the merged commit at the head of `main`.
 
 1. Merge the change to `main`. The tag must match `metadata.version` in
    `manifest.yaml` (`v0.1.0` for version `0.1.0`; a `-rc1` style suffix is

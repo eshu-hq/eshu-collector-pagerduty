@@ -183,6 +183,11 @@ func TestReleaseWorkflowContractCatchesSeededViolations(t *testing.T) {
 		// Guards.
 		"tag guard weakened":        {`test "v${version}" = "${TAG_NAME%%-*}"`, "true"},
 		"tag env not ref":           {"TAG_NAME: ${{ github.ref_name }}", "TAG_NAME: main"},
+		"image name hardcoded":      {"IMAGE_NAME: ${{ github.repository }}", "IMAGE_NAME: eshu-hq/eshu-collector-pagerduty"},
+		"main head guard dropped":   {"Require the tag to point at the protected main head", "Some other step"},
+		"main head guard unguarded": {"- name: Require the tag to point at the protected main head\n        if: github.ref_type == 'tag'\n", "- name: Require the tag to point at the protected main head\n"},
+		"main head guard wrong sha": {"TAG_COMMIT: ${{ github.sha }}", "TAG_COMMIT: ${{ github.ref }}"},
+		"main head guard passes":    {"            exit 1\n          fi\n\n      - name: Require the tag to match", "            exit 0\n          fi\n\n      - name: Require the tag to match"},
 		"verify missing -R":         {"\"${OCI_IMAGE_REF}\" -R \"${GITHUB_REPOSITORY}\"\n", "\"${OCI_IMAGE_REF}\"\n"},
 		"attestation verify by tag": {"OCI_IMAGE_REF: oci://ghcr.io/eshu-hq/eshu-collector-pagerduty@${{ steps.build.outputs.digest }}", "OCI_IMAGE_REF: oci://ghcr.io/eshu-hq/eshu-collector-pagerduty:v0.1.0"},
 		"anonymous keeps creds":     {`DOCKER_CONFIG="${anonymous}" docker buildx imagetools`, "docker buildx imagetools"},
