@@ -7,9 +7,9 @@ lane commands CI runs (vet, org golangci-lint set, gofumpt format check,
 actionlint at the pinned `ACTIONLINT_VERSION`, `go mod tidy -diff`, the
 500-line file cap, build, tests, race with the coverage floor). CI stays
 authoritative; `make ci` is the fast local floor. `make lint` runs
-actionlint unconditionally, while the CI lint lane scopes it to workflow
-changes — local is the stricter superset, so a workflow-syntax break fails
-before push.
+actionlint unconditionally, while CI runs it as its own `actionlint` lane
+scoped to workflow changes — local is the stricter superset, so a
+workflow-syntax break fails before push.
 
 Need a single lane? `make lint`, `make test`, or `make race` run on their own.
 
@@ -38,12 +38,31 @@ the `lint` lane); split before approaching the limit.
 
 ## What CI runs on your PR
 
-`.github/workflows/ci.yml` picks lanes by changed paths: docs-only PRs run
-no lane, Go changes run `lint`/`test`/`race`/`boundary`/`image` (the Dockerfile builds the binary from them) plus `gosec`,
-fixture files tests read run `test`, dependency changes add `govulncheck`
-(`gosec` already runs), workflow files and `.github/dependabot.yml` run actionlint inside `lint` plus
-`lint`/`test`/`race`/`boundary` plus `gosec`, shell scripts run `shell`,
-Dockerfile changes run `image`, and anything unclassified (the `misc`
-catch-all, e.g. `Makefile`) runs `lint`/`test`/`race`/`boundary`.
-Pushes, schedules, and dispatches run every lane. `ci-complete` is the only
-required context — it passes when lanes were legitimately skipped.
+`.github/workflows/ci.yml` is a thin caller. Its `changes` job (always
+runs, every event) picks lanes by changed paths, then the `go-ci` job calls
+the shared `eshu-hq/.github` `go-collector-ci.yml` reusable, pinned by
+commit SHA (tag `v2` as a comment only), which holds the lane bodies:
+`lint`, `test`, `race`, `boundary`, `shell`, `image`, `govulncheck`,
+`gosec`, and `actionlint`. Their check runs nest as `go-ci / <lane>`. The
+tool versions (golangci-lint, govulncheck, gosec, actionlint) and the
+coverage floor are inputs on the `go-ci` call; bump them there, and keep the
+floor equal to `COVERAGE_FLOOR` in the `Makefile`
+(`TestCoverageFloorParity` enforces it). `ci_reusable_test.go` freezes the
+caller shape, the pin, and every run gate.
+
+Docs-only PRs run no lane. Go changes (including `testdata/**` and
+`manifest.yaml`, which are compiled or embedded) run
+`lint`/`test`/`race`/`boundary`/`image` (the Dockerfile builds the binary
+from them) plus `gosec`. Fixture files tests read run `test` only.
+Dependency changes add `govulncheck` (`gosec` already runs). Workflow files
+and `.github/dependabot.yml` run `actionlint` plus
+`lint`/`test`/`race`/`boundary` plus `gosec`. Shell scripts run `shell`, and
+Dockerfile changes run `image`. Anything unclassified (the `misc`
+catch-all, e.g. `Makefile`) runs `lint`/`test`/`race`/`boundary`. Pushes,
+schedules, and dispatches run every lane. The `image` lane proves the seed
+contract and that `manifest.yaml` and every Dockerfile `FROM` stay
+digest-pinned. Two caller jobs sit beside `go-ci`: `gosec-sarif` uploads the
+gosec report to the Security tab on non-PR events, and `govulncheck-report`
+files or updates a findings issue when a scheduled run fails. `ci-complete`
+is the only required context — it passes when lanes were legitimately
+skipped.
