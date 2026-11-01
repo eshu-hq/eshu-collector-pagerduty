@@ -52,6 +52,7 @@ type workflowStep struct {
 	ID   string            `yaml:"id"`
 	Uses string            `yaml:"uses"`
 	Run  string            `yaml:"run"`
+	If   string            `yaml:"if"`
 	Env  map[string]string `yaml:"env"`
 	With map[string]any    `yaml:"with"`
 }
@@ -194,6 +195,11 @@ func checkStepHygiene(c *contract, workflow releaseWorkflow, steps []workflowSte
 		tagEnv = tagEnv || job.Env["TAG_NAME"] == "${{ github.ref_name }}"
 	}
 	c.need(tagEnv, "no job sets TAG_NAME from github.ref_name in env")
+	imageEnv := false
+	for _, job := range workflow.Jobs {
+		imageEnv = imageEnv || job.Env["IMAGE_NAME"] == "${{ github.repository }}"
+	}
+	c.need(imageEnv, "no job sets IMAGE_NAME from github.repository in env")
 }
 
 func checkRawText(c *contract, body string) {
@@ -290,6 +296,7 @@ func checkGuards(c *contract, workflow releaseWorkflow, steps []workflowStep) {
 		}
 	}
 	checkGuardOrder(c, steps)
+	checkMainHeadGuard(c, steps)
 	verifyAttest, ok := stepRunning(steps, attestVerifyFlag)
 	if !ok {
 		c.add("workflow never runs %q", attestVerifyFlag)
@@ -344,6 +351,35 @@ func checkGuardOrder(c *contract, steps []workflowStep) {
 	if guardIdx >= 0 {
 		c.need(checkoutIdx >= 0 && checkoutIdx < guardIdx, "the checkout (step %d) must run before the tag guard (step %d)", checkoutIdx, guardIdx)
 	}
+}
+
+// checkMainHeadGuard requires the step that refuses a v* tag cut from any
+// commit other than the protected main head: tag events only, comparing the
+// tagged commit (github.sha, passed through env) with a freshly fetched
+// origin/main, failing on a mismatch, between the checkout and the manifest
+// guard.
+func checkMainHeadGuard(c *contract, steps []workflowStep) {
+	guardIdx := stepIndex(steps, func(s workflowStep) bool { return s.Name == mainHeadStep })
+	if guardIdx < 0 {
+		c.add("no step named %q", mainHeadStep)
+		return
+	}
+	guard := steps[guardIdx]
+	c.need(guard.If == "github.ref_type == 'tag'", "main-head guard runs when %q, want only tag events", guard.If)
+	c.need(guard.Env["TAG_COMMIT"] == "${{ github.sha }}", "main-head guard TAG_COMMIT is %q, want ${{ github.sha }}", guard.Env["TAG_COMMIT"])
+	for _, want := range []string{
+		"git fetch origin main",
+		`main_head="$(git rev-parse origin/main)"`,
+		`[[ "${TAG_COMMIT}" != "${main_head}" ]]`,
+		"not the protected main head",
+		"exit 1",
+	} {
+		c.need(strings.Contains(guard.Run, want), "main-head guard lacks %q", want)
+	}
+	checkoutIdx := stepIndex(steps, func(s workflowStep) bool { return s.Name == checkoutStep })
+	manifestIdx := stepIndex(steps, func(s workflowStep) bool { return s.Name == tagGuardStep })
+	c.need(checkoutIdx >= 0 && checkoutIdx < guardIdx, "the checkout (step %d) must run before the main-head guard (step %d)", checkoutIdx, guardIdx)
+	c.need(manifestIdx >= 0 && guardIdx < manifestIdx, "the main-head guard (step %d) must run before the manifest guard (step %d)", guardIdx, manifestIdx)
 }
 
 // yamlHasKey reports whether any mapping in the document has key as a key.
