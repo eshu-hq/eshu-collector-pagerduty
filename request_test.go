@@ -5,6 +5,7 @@ package collector
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -23,7 +24,7 @@ func TestDecodeRequestRoundTripsTheHostDocument(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DecodeRequest() error = %v", err)
 	}
-	if got.Claim != want.Claim || got.ProtocolVersion != want.ProtocolVersion {
+	if !reflect.DeepEqual(got.Claim, want.Claim) || got.ProtocolVersion != want.ProtocolVersion {
 		t.Fatalf("claim = %+v, want %+v", got.Claim, want.Claim)
 	}
 	if got.Config["incident_limit"] != float64(25) {
