@@ -195,7 +195,7 @@ func TestReleaseWorkflowContractCatchesSeededViolations(t *testing.T) {
 		"summary wrong digest":      {"DIGEST: ${{ steps.build.outputs.digest }}", "DIGEST: sha256:0000"},
 		"build push disabled":       {"push: true", "push: false"},
 		"build id renamed":          {"id: build\n", "id: image\n"},
-		"cosign installer absent":   {"      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2\n", ""},
+		"cosign installer absent":   {"      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3\n", ""},
 	}
 	for name, test := range replacements {
 		if !strings.Contains(good, test.from) {
