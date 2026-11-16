@@ -1,9 +1,9 @@
 module github.com/eshu-hq/eshu-collector-pagerduty
 
-go 1.26.10
+go 1.26.11
 
 require (
-	github.com/eshu-hq/eshu-sdk/collector v0.2.0-rc.1
-	github.com/eshu-hq/eshu-sdk/factschema v0.1.0-rc.5
+	github.com/eshu-hq/eshu-sdk/collector v0.2.0-rc.4
+	github.com/eshu-hq/eshu-sdk/factschema v0.1.0-rc.19
 	gopkg.in/yaml.v3 v3.0.1
 )
